@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 function normalizeName(name) {
@@ -27,8 +28,7 @@ function makeUniqueIds(nodes) {
   const idByNode = new Map();
   for (const node of nodes) {
     const rawName = normalizeName(node.name);
-    const base =
-      rawName && (nameCounts.get(rawName) || 0) === 1 ? rawName : makeNodePath(node) || node.uuid;
+    const base = rawName && (nameCounts.get(rawName) || 0) === 1 ? rawName : makeNodePath(node) || node.uuid;
 
     let id = base;
     let i = 2;
@@ -40,6 +40,10 @@ function makeUniqueIds(nodes) {
     idByNode.set(node, id);
   }
   return idByNode;
+}
+
+function cloneMaterial(material) {
+  return material?.clone ? material.clone() : material;
 }
 
 export class AtlasSceneLibrary {
@@ -55,6 +59,7 @@ export class AtlasSceneLibrary {
     this._nodeId = new Map();
     this._nodeById = new Map();
     this._idsByName = new Map();
+    this._originalMaterials = new Map();
 
     this._ruleGroupToIds = new Map();
     this._ruleIdToGroups = new Map();
@@ -74,16 +79,18 @@ export class AtlasSceneLibrary {
 
     this._nodes = [];
     this.root.traverse((node) => {
-      if (node && node.isMesh) this._nodes.push(node);
+      if (node?.isMesh) this._nodes.push(node);
     });
 
     this._nodeId = makeUniqueIds(this._nodes);
     this._nodeById = new Map();
     this._idsByName = new Map();
+    this._originalMaterials = new Map();
 
     for (const node of this._nodes) {
       const id = this._nodeId.get(node);
       this._nodeById.set(id, node);
+      this._originalMaterials.set(id, cloneMaterial(node.material));
 
       const name = normalizeName(node.name);
       if (name) {
@@ -136,11 +143,20 @@ export class AtlasSceneLibrary {
     }
   }
 
+  getMeshes() {
+    return this._nodes.slice();
+  }
+
+  getNodeById(id) {
+    return this._nodeById.get(normalizeName(id)) || null;
+  }
+
+  getIdByNode(node) {
+    return this._nodeId.get(node) || '';
+  }
+
   getGroupNames() {
-    const names = new Set([
-      ...this._ruleGroupToIds.keys(),
-      ...this._manualGroupToIds.keys()
-    ]);
+    const names = new Set([...this._ruleGroupToIds.keys(), ...this._manualGroupToIds.keys()]);
     return Array.from(names).sort();
   }
 
@@ -315,6 +331,46 @@ export class AtlasSceneLibrary {
     return removed;
   }
 
+  applyMaterial(target, params = {}) {
+    const ids = typeof target === 'object' && target?.group ? this.getGroupMembers(target.group) : this._resolveToIds(target);
+    const out = [];
+    for (const id of ids) {
+      const node = this._nodeById.get(id);
+      if (!node) continue;
+      const material = new THREE.MeshStandardMaterial({
+        color: params.color || '#ffffff',
+        roughness: params.roughness ?? 0.6,
+        metalness: params.metalness ?? 0.05,
+        transparent: Boolean(params.transparent),
+        opacity: params.opacity ?? 1,
+        emissive: params.emissive || 0x000000,
+        emissiveIntensity: params.emissiveIntensity ?? 0,
+        depthWrite: params.depthWrite ?? true,
+        side: THREE.DoubleSide
+      });
+      node.material = material;
+      out.push(id);
+    }
+    return out;
+  }
+
+  resetMaterial(target) {
+    const ids = typeof target === 'object' && target?.group ? this.getGroupMembers(target.group) : this._resolveToIds(target);
+    const out = [];
+    for (const id of ids) {
+      const node = this._nodeById.get(id);
+      const material = this._originalMaterials.get(id);
+      if (!node || !material) continue;
+      node.material = cloneMaterial(material);
+      out.push(id);
+    }
+    return out;
+  }
+
+  resetAllMaterials() {
+    for (const id of this.getElementIds()) this.resetMaterial(id);
+  }
+
   _resolveToIds(idOrName) {
     const key = normalizeName(idOrName);
     if (!key) return [];
@@ -324,4 +380,3 @@ export class AtlasSceneLibrary {
     return [];
   }
 }
-
