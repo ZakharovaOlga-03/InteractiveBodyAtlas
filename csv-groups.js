@@ -1,6 +1,11 @@
 /**
  * csv-groups.js — библиотека для работы с CSV групп и подгрупп.
  *
+ * Библиотека не зависит от интерфейса (DOM, кнопки, списки). Использование — только через
+ * скрипт в HTML: тег <script type="text/atlas-script"> и/или консоль (scene.*). Хост
+ * предоставляет сцену, findObject, загрузчики по имени (loadCsvByName, loadModel1ByName, …);
+ * отображается только 3D-модель.
+ *
  * Формат строки CSV: groupId;;item1;item2;item3;...
  * - Нумерованные группы (колонка вида "N:Name"): только чтение.
  * - Подгруппы (колонка заканчивается на ".g"): можно добавлять, редактировать, удалять.
@@ -56,6 +61,33 @@
  *
  * УТИЛИТЫ
  *   selectFile(accept)            — диалог выбора файла, Promise<File|null>
+ *
+ * КОНСОЛЬНЫЙ API СЦЕНЫ (для вызова из консоли браузера)
+ *   createSceneConsoleAPI({ scene, findObject, getGroupByName [, csvManager, triggerLoadCsv, triggerLoadModel, triggerLoadModel2 ] })
+ *   Возвращает объект с методами (вешается на scene или window.scene):
+ *   Видимость и материалы:
+ *     show_group(groupName)       — показать группу
+ *     hide_group(groupName)       — скрыть группу
+ *     hide_element(elementName)   — скрыть элемент
+ *     change_mat(target, material) — материал группе или элементу
+ *     show_marker_group(markerGroup) — показать группу маркеров на сцене
+ *   Файлы (если переданы triggerLoadCsv, triggerLoadModel, csvManager):
+ *     load_csv(fileName?)         — без аргумента: диалог; с именем: загрузка из папки с HTML
+ *     load_model(fileName?)       — то же для модели 1
+ *     load_model_2(fileName?)     — то же для модели 2 (возвращают Promise при загрузке по имени)
+ *     save_csv(fileName?)         — сохранить CSV в файл
+ *   Данные (если передан csvManager):
+ *     get_groups()                — { base, subgroups }
+ *     get_base_groups()           — массив базовых групп
+ *     get_subgroups()             — массив подгрупп
+ *     get_items()                 — все уникальные имена элементов
+ *     csv_string()                — текущий CSV в виде строки
+ *   Редактирование подгрупп (если передан csvManager):
+ *     add_subgroup(name, items?)  — создать подгруппу
+ *     edit_subgroup(groupName, newName)
+ *     delete_subgroup(groupName)
+ *     add_item_to_subgroup(groupName, itemName)
+ *     remove_item_from_subgroup(groupName, itemName)
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  */
@@ -469,6 +501,271 @@ export function selectFile(accept = '.csv') {
     document.body.appendChild(input);
     input.click();
   });
+}
+
+// =============================================================================
+// КОНСОЛЬНЫЙ API СЦЕНЫ (scene.show_group, scene.hide_element, scene.change_mat, …)
+// =============================================================================
+
+/**
+ * Создаёт объект с методами для управления сценой из консоли браузера.
+ * Подключение: Object.assign(scene, createSceneConsoleAPI({ scene, findObject, getGroupByName, csvManager, triggerLoadCsv, triggerLoadModel })); window.scene = scene;
+ *
+ * @param {Object} opts
+ * @param {Object} opts.scene
+ * @param {function(string): Object|null} opts.findObject
+ * @param {function(string): { items: string[] }|null} opts.getGroupByName
+ * @param {Object} [opts.csvManager] — CSVGroupsManager для save_csv, get_groups, CRUD
+ * @param {function()} [opts.triggerLoadCsv] — вызвать выбор CSV (например () => document.getElementById('csvInput').click())
+ * @param {function()} [opts.triggerLoadModel] — вызвать выбор модели 1 (например () => document.getElementById('glbInput').click())
+ * @param {function()} [opts.triggerLoadModel2] — вызвать выбор модели 2 (например () => document.getElementById('glbInput2').click())
+ * @param {function(string): Promise} [opts.loadCsvByName] — загрузить CSV по имени файла (из папки с HTML)
+ * @param {function(string): Promise} [opts.loadModel1ByName] — загрузить модель 1 по имени
+ * @param {function(string): Promise} [opts.loadModel2ByName] — загрузить модель 2 по имени
+ */
+export function createSceneConsoleAPI(opts) {
+  const {
+    scene, findObject, getGroupByName, csvManager,
+    triggerLoadCsv, triggerLoadModel, triggerLoadModel2,
+    loadCsvByName, loadModel1ByName, loadModel2ByName,
+  } = opts;
+
+  function showObj(obj) {
+    if (!obj) return;
+    obj.visible = true;
+    let p = obj.parent;
+    while (p) {
+      p.visible = true;
+      p = p.parent;
+    }
+  }
+
+  function hideObj(obj) {
+    if (!obj) return;
+    obj.traverse((c) => { c.visible = false; });
+  }
+
+  function setMaterialOn(obj, material) {
+    if (!obj) return;
+    obj.traverse((c) => {
+      if (c.isMesh) {
+        if (Array.isArray(c.material)) {
+          for (let i = 0; i < c.material.length; i++) c.material[i] = material;
+        } else {
+          c.material = material;
+        }
+      }
+    });
+  }
+
+  return {
+    /**
+     * Показать группу по имени (базовую или подгруппу).
+     * Пример: scene.show_group("Bones_of_free_part_of_lower_limb.g")
+     * @param {string} groupName — rawName группы (например "1:1:_Skeletal_system" или "Bones_of_pelvic_girdle.g")
+     */
+    show_group(groupName) {
+      const group = getGroupByName && getGroupByName(String(groupName));
+      if (!group || !group.items) {
+        console.warn('Группа не найдена:', groupName);
+        return this;
+      }
+      group.items.forEach((itemName) => {
+        const obj = findObject(itemName);
+        if (obj) showObj(obj);
+      });
+      return this;
+    },
+
+    /**
+     * Скрыть группу.
+     * Пример: scene.hide_group("Bones_of_free_part_of_lower_limb.g")
+     * @param {string} groupName
+     */
+    hide_group(groupName) {
+      const group = getGroupByName && getGroupByName(String(groupName));
+      if (!group || !group.items) {
+        console.warn('Группа не найдена:', groupName);
+        return this;
+      }
+      group.items.forEach((itemName) => {
+        const obj = findObject(itemName);
+        if (obj) hideObj(obj);
+      });
+      return this;
+    },
+
+    /**
+     * Скрыть один элемент.
+     * Пример: scene.hide_element("Femur.l")
+     * @param {string} elementName
+     */
+    hide_element(elementName) {
+      const obj = findObject(String(elementName));
+      if (!obj) {
+        console.warn('Элемент не найден:', elementName);
+        return this;
+      }
+      hideObj(obj);
+      return this;
+    },
+
+    /**
+     * Изменить материал группе или одному элементу.
+     * Примеры:
+     *   scene.change_mat("1:1:_Skeletal_system", custom_material)
+     *   scene.change_mat("Hip_bone.l", custom_material_2)
+     * @param {string} target — имя группы или элемента
+     * @param {Object} material — THREE.Material (или совместимый объект)
+     */
+    change_mat(target, material) {
+      const name = String(target);
+      const group = getGroupByName && getGroupByName(name);
+      if (group && group.items) {
+        group.items.forEach((itemName) => {
+          const obj = findObject(itemName);
+          setMaterialOn(obj, material);
+        });
+      } else {
+        const obj = findObject(name);
+        if (!obj) {
+          console.warn('Группа/элемент не найден:', target);
+          return this;
+        }
+        setMaterialOn(obj, material);
+      }
+      return this;
+    },
+
+    /**
+     * Показать группу маркеров на сцене (добавить на сцену).
+     * Пример: scene.show_marker_group(my_marker_group1)
+     * @param {Object} markerGroup — THREE.Group или Object3D
+     */
+    show_marker_group(markerGroup) {
+      if (scene && typeof scene.add === 'function') scene.add(markerGroup);
+      return this;
+    },
+
+    // ---------- Файлы ----------
+    /**
+     * Загрузить CSV. Без аргумента — диалог выбора файла.
+     * С аргументом (имя файла) — загрузка из папки с HTML: scene.load_csv("atlas.csv").
+     * @param {string} [fileName] — имя файла в папке со страницей
+     * @returns {this|Promise<this>}
+     */
+    load_csv(fileName) {
+      const name = typeof fileName === 'string' ? fileName.trim() : '';
+      if (name && typeof loadCsvByName === 'function') {
+        return loadCsvByName(name).then(() => this);
+      }
+      if (typeof triggerLoadCsv === 'function') triggerLoadCsv();
+      else console.warn('load_csv: передайте triggerLoadCsv или loadCsvByName в createSceneConsoleAPI');
+      return this;
+    },
+    /**
+     * Загрузить модель 1. Без аргумента — диалог. С именем — из папки с HTML: scene.load_model("model1.glb").
+     * @param {string} [fileName]
+     * @returns {this|Promise<this>}
+     */
+    load_model(fileName) {
+      const name = typeof fileName === 'string' ? fileName.trim() : '';
+      if (name && typeof loadModel1ByName === 'function') {
+        return loadModel1ByName(name).then(() => this);
+      }
+      if (typeof triggerLoadModel === 'function') triggerLoadModel();
+      else console.warn('load_model: передайте triggerLoadModel или loadModel1ByName в createSceneConsoleAPI');
+      return this;
+    },
+    /**
+     * Загрузить модель 2. Без аргумента — диалог. С именем — из папки: scene.load_model_2("model2.glb").
+     * @param {string} [fileName]
+     * @returns {this|Promise<this>}
+     */
+    load_model_2(fileName) {
+      const name = typeof fileName === 'string' ? fileName.trim() : '';
+      if (name && typeof loadModel2ByName === 'function') {
+        return loadModel2ByName(name).then(() => this);
+      }
+      if (typeof triggerLoadModel2 === 'function') triggerLoadModel2();
+      else console.warn('load_model_2: передайте triggerLoadModel2 или loadModel2ByName в createSceneConsoleAPI');
+      return this;
+    },
+    /** Сохранить CSV в файл. */
+    save_csv(fileName) {
+      if (!csvManager) { console.warn('save_csv: передайте csvManager'); return this; }
+      csvManager.saveToFile(fileName);
+      return this;
+    },
+
+    // ---------- Данные ----------
+    /** Вернуть { base: baseGroups[], subgroups: subgroups[] }. */
+    get_groups() {
+      if (!csvManager) { console.warn('get_groups: передайте csvManager'); return { base: [], subgroups: [] }; }
+      return { base: csvManager.getBaseGroups(), subgroups: csvManager.getSubgroups() };
+    },
+    get_base_groups() {
+      if (!csvManager) return [];
+      return csvManager.getBaseGroups();
+    },
+    get_subgroups() {
+      if (!csvManager) return [];
+      return csvManager.getSubgroups();
+    },
+    /** Все уникальные имена элементов из всех групп. */
+    get_items() {
+      if (!csvManager) return [];
+      return csvManager.getAllItems();
+    },
+    /** Текущее содержимое CSV в виде строки. */
+    csv_string() {
+      if (!csvManager) return '';
+      return csvManager.saveToCSVString();
+    },
+
+    // ---------- Редактирование подгрупп ----------
+    /** Создать подгруппу. items — массив имён элементов (необязательно). */
+    add_subgroup(name, items) {
+      if (!csvManager) { console.warn('add_subgroup: передайте csvManager'); return this; }
+      const result = csvManager.addSubgroup(name, items || []);
+      if (!result.success) console.warn('add_subgroup:', result.error);
+      return this;
+    },
+    /** Переименовать подгруппу. */
+    edit_subgroup(groupName, newName) {
+      if (!csvManager) { console.warn('edit_subgroup: передайте csvManager'); return this; }
+      const group = getGroupByName && getGroupByName(String(groupName));
+      if (!group) { console.warn('Группа не найдена:', groupName); return this; }
+      const result = csvManager.editSubgroup(group, newName);
+      if (!result.success) console.warn('edit_subgroup:', result.error);
+      return this;
+    },
+    /** Удалить подгруппу. */
+    delete_subgroup(groupName) {
+      if (!csvManager) { console.warn('delete_subgroup: передайте csvManager'); return this; }
+      const group = getGroupByName && getGroupByName(String(groupName));
+      if (!group) { console.warn('Группа не найдена:', groupName); return this; }
+      const result = csvManager.deleteSubgroup(group);
+      if (!result.success) console.warn('delete_subgroup:', result.error);
+      return this;
+    },
+    /** Добавить элемент в подгруппу. */
+    add_item_to_subgroup(groupName, itemName) {
+      if (!csvManager) { console.warn('add_item_to_subgroup: передайте csvManager'); return this; }
+      const group = getGroupByName && getGroupByName(String(groupName));
+      if (!group) { console.warn('Группа не найдена:', groupName); return this; }
+      csvManager.addItemToSubgroup(group, itemName);
+      return this;
+    },
+    /** Удалить элемент из подгруппы. */
+    remove_item_from_subgroup(groupName, itemName) {
+      if (!csvManager) { console.warn('remove_item_from_subgroup: передайте csvManager'); return this; }
+      const group = getGroupByName && getGroupByName(String(groupName));
+      if (!group) { console.warn('Группа не найдена:', groupName); return this; }
+      csvManager.removeItemFromSubgroup(group, itemName);
+      return this;
+    },
+  };
 }
 
 export default CSVGroupsManager;
