@@ -165,9 +165,21 @@ function getSelectedMarker() {
 
 function selectMarker(markerId) {
     if (!markerManager) return;
+
     markerManager.markers.forEach((m) => {
-        m.selected = m.id === markerId;
+        m.selected = false;
     });
+
+    const marker = markerManager.markers.find((m) => m.id === markerId);
+    if (marker) {
+        marker.selected = true;
+
+
+        if (marker.markerGroup !== activeMarkerGroup) {
+            console.log(`Маркер из группы ${marker.markerGroup}, текущая группа ${activeMarkerGroup}`);
+        }
+    }
+
     updateMarkerInspector();
     updateMarkerTable();
 }
@@ -268,20 +280,28 @@ class MarkerManager {
     }
 
     _makeMaterial(style = {}) {
-        return new THREE.MeshPhysicalMaterial({
-            color: new THREE.Color(style.color || this.defaultStyle.color),
-            emissive: new THREE.Color(style.color || this.defaultStyle.color),
-            emissiveIntensity: 0.25,
-            metalness: 0.05,
-            roughness: 0.12,
-            clearcoat: 1,
-            clearcoatRoughness: 0.08,
-            transparent: true,
-            opacity: Number.isFinite(style.opacity) ? style.opacity : this.defaultStyle.opacity,
-            depthTest: !(style.alwaysVisible ?? this.defaultStyle.alwaysVisible),
-            depthWrite: false
-        });
-    }
+    const alwaysVisible = style.alwaysVisible ?? this.defaultStyle.alwaysVisible;
+    
+    return new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(style.color || this.defaultStyle.color),
+        emissive: new THREE.Color(style.color || this.defaultStyle.color),
+        emissiveIntensity: 0.25,
+        metalness: 0.05,
+        roughness: 0.12,
+        clearcoat: 1,
+        clearcoatRoughness: 0.08,
+        transparent: true,
+        opacity: Number.isFinite(style.opacity) ? style.opacity : this.defaultStyle.opacity,
+        
+       
+        depthTest: true,           
+        depthWrite: false,          
+        
+        polygonOffset: true,        
+        polygonOffsetFactor: 1,    
+        polygonOffsetUnits: 1      
+    });
+}
 
     _getGeometry(shape = 'sphere') {
         return shape === 'cube' ? this.boxGeometry : this.sphereGeometry;
@@ -398,10 +418,10 @@ class MarkerManager {
     }
 
     _applyMarkerVisibility(marker) {
-    if (!marker?.sprite) return;
-    const markerGroupVisible = this.markerGroupVisibility[marker.markerGroup] !== false;
-    marker.sprite.visible = marker.visible && markerGroupVisible;
-}
+        if (!marker?.sprite) return;
+        const markerGroupVisible = this.markerGroupVisibility[marker.markerGroup] !== false;
+        marker.sprite.visible = marker.visible && markerGroupVisible;
+    }
     refreshVisibility() {
         for (const marker of this.markers) this._applyMarkerVisibility(marker);
     }
@@ -480,6 +500,12 @@ class MarkerManager {
             marker.sprite.material?.dispose?.();
         }
         if (document.getElementById('marker-popup')?.dataset.markerId === id) hideMarkerPopup();
+
+        // Вызываем колбэк если есть
+        if (this.onMarkerRemoved) {
+            this.onMarkerRemoved(id);
+        }
+
         return true;
     }
 
@@ -762,34 +788,54 @@ function renderMarkerGroupControls() {
     if (!groups.includes(activeMarkerGroup)) activeMarkerGroup = groups[0] || 'group_1';
 
     if (select) {
-        select.innerHTML = groups.map((groupName) => `<option value="${escapeHtml(groupName)}" ${groupName === activeMarkerGroup ? 'selected' : ''}>${escapeHtml(groupName)}</option>`).join('');
+        select.innerHTML = groups.map((groupName) =>
+            `<option value="${escapeHtml(groupName)}" ${groupName === activeMarkerGroup ? 'selected' : ''}>${escapeHtml(groupName)}</option>`
+        ).join('');
+
+
+        select.addEventListener('change', (e) => {
+            const selectedGroup = e.target.value;
+
+
+            markerManager.markers.forEach(marker => {
+                marker.visible = false;
+            });
+
+
+            markerManager.markers.forEach(marker => {
+                if (marker.markerGroup === selectedGroup) {
+                    marker.visible = true;
+                }
+            });
+
+
+            activeMarkerGroup = selectedGroup;
+
+
+            markerManager.setMarkerGroupVisibility(selectedGroup, true);
+
+
+            renderMarkerGroupControls();
+            updateMarkerTable();
+
+            setStatus(`Загружены маркеры группы: ${selectedGroup}`);
+        });
     }
 
     if (listWrap) {
         const query = String(searchInput?.value || '').trim().toLowerCase();
         const filtered = groups.filter((groupName) => groupName.toLowerCase().includes(query));
-        
+
         listWrap.innerHTML = filtered.map((groupName) => {
             const count = markerManager.markers.filter((m) => m.markerGroup === groupName).length;
-            const visible = markerManager.markerGroupVisibility[groupName] !== false;
-            
-            // Создаем кнопку с правильным символом в зависимости от видимости
-            const visibilityIcon = visible ? '👁️' : '👁️‍🗨️';
-            const visibilityTitle = visible ? 'Скрыть группу' : 'Показать группу';
-            
+
             return `
                 <div class="group-store-row" data-group-row="${escapeHtml(groupName)}">
-                    <div class="subtle">${escapeHtml(groupName)} <span class="subtle">(${count})</span></div>
-                    <div style="display:flex; gap: 4 px;">
-                        <button class="mini-btn visibility-group-btn" 
-                                data-group="${escapeHtml(groupName)}" 
-                                data-visible="${visible}"
-                                title="${visibilityTitle}">
-                            ${visibilityIcon}
-                        </button>
+                    <div class="group-store-name">${escapeHtml(groupName)} <span class="subtle">(${count})</span></div>
+                    <div style="display:flex; gap:4px;">
                         <button class="mini-btn primary use-group-btn" 
                                 data-group="${escapeHtml(groupName)}"
-                                title="Сделать активной">
+                                title="Показать маркеры этой группы">
                             ↑
                         </button>
                         <button class="mini-btn danger delete-group-btn" 
@@ -802,36 +848,31 @@ function renderMarkerGroupControls() {
             `;
         }).join('') || '<div class="empty-note">Группы не найдены</div>';
 
-        // Обработчик для кнопки видимости группы
-        listWrap.querySelectorAll('.visibility-group-btn').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const groupName = sanitizeGroupName(btn.dataset.group);
-                const currentVisible = btn.dataset.visible === 'true';
-                const newVisible = !currentVisible;
-                
-                // Переключаем видимость группы
-                markerManager.setMarkerGroupVisibility(groupName, newVisible);
-                
-                // Обновляем кнопку
-                btn.dataset.visible = newVisible;
-                btn.innerHTML = newVisible ? '👁️' : '👁️‍🗨️';
-                btn.title = newVisible ? 'Скрыть группу' : 'Показать группу';
-                
-                // Обновляем таблицу маркеров, чтобы отразить изменения видимости
-                updateMarkerTable();
-                
-                setStatus(`Группа «${groupName}» ${newVisible ? 'показана' : 'скрыта'}`);
-            });
-        });
-
         listWrap.querySelectorAll('.use-group-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const groupName = sanitizeGroupName(btn.dataset.group);
-                if (!confirm(`Сделать группу «${groupName}» активной?`)) return;
+
+                // Сначала скрываем ВСЕ маркеры
+                markerManager.markers.forEach(marker => {
+                    marker.visible = false;
+                });
+
+                // Затем показываем только маркеры выбранной группы
+                markerManager.markers.forEach(marker => {
+                    if (marker.markerGroup === groupName) {
+                        marker.visible = true;
+                    }
+                });
+
+                // Делаем группу активной для добавления новых маркеров
                 activeMarkerGroup = groupName;
-                markerManager.setMarkerGroupVisibility(groupName, true);
+
+                // Обновляем интерфейс
                 renderMarkerGroupControls();
-                setStatus(`Активна группа маркеров: ${groupName}`);
+                updateMarkerTable();
+                markerManager.refreshVisibility();
+
+                setStatus(`Показаны маркеры группы: ${groupName}`);
             });
         });
 
@@ -898,10 +939,14 @@ function updateMarkerInspector() {
 function updateMarkerTable() {
     const wrap = document.getElementById('marker-table');
     if (!wrap || !markerManager) return;
+
     renderMarkerGroupControls();
-    const markers = markerManager.markers;
+
+    // Фильтруем маркеры только для активной группы
+    const markers = markerManager.markers.filter(m => m.markerGroup === activeMarkerGroup);
+
     if (!markers.length) {
-        wrap.innerHTML = '<div class="empty-note">Маркеров пока нет</div>';
+        wrap.innerHTML = '<div class="empty-note">Нет маркеров в этой группе</div>';
         return;
     }
 
@@ -915,7 +960,6 @@ function updateMarkerTable() {
             <div class="small-note">${[m.worldPosition?.x, m.worldPosition?.y, m.worldPosition?.z].map((v) => Number(v || 0).toFixed(2)).join(', ')}</div>
             <div class="button-row compact-row">
                 <button data-action="focus">Фокус</button>
-                <button data-action="toggle-visibility">${m.visible ? 'Скрыть' : 'Показать'}</button>
                 <button data-action="show">Коммент</button>
                 <button data-action="delete">Удалить</button>
             </div>
@@ -936,6 +980,7 @@ function updateMarkerTable() {
             if (!id) return;
             const marker = markerManager.markers.find((m) => m.id === id);
             if (!marker) return;
+
             if (btn.dataset.action === 'delete') {
                 if (!confirm('Удалить этот маркер?')) return;
                 markerManager.removeMarker(id);
@@ -943,17 +988,15 @@ function updateMarkerTable() {
                 updateMarkerInspector();
                 return;
             }
+
             if (btn.dataset.action === 'focus') {
                 if (marker.sprite) controls.target.copy(marker.sprite.position);
                 return;
             }
+
             if (btn.dataset.action === 'show') {
                 showMarkerPopup(marker);
             }
-            if (btn.dataset.action === 'toggle-visibility') {
-    markerManager.toggleMarkerVisibility(id);
-    updateMarkerTable(); // обновить отображение
-    return;}
         });
     });
 }
@@ -1079,6 +1122,29 @@ function bindUIEvents() {
         const text = await file.text();
         try {
             markerManager.loadFromJSON(JSON.parse(text));
+
+
+            const groups = markerManager.getMarkerGroups();
+            if (groups.length > 0) {
+
+                const groupToShow = groups.includes(activeMarkerGroup) ? activeMarkerGroup : groups[0];
+
+
+                markerManager.markers.forEach(marker => {
+                    marker.visible = false;
+                });
+
+
+                markerManager.markers.forEach(marker => {
+                    if (marker.markerGroup === groupToShow) {
+                        marker.visible = true;
+                    }
+                });
+
+                activeMarkerGroup = groupToShow;
+                markerManager.setMarkerGroupVisibility(groupToShow, true);
+            }
+
             renderMarkerGroupControls();
             updateMarkerTable();
             updateMarkerInspector();
@@ -1182,6 +1248,7 @@ function bindSceneEvents() {
             if (marker) {
                 selectMarker(marker.id);
                 updateMarkerInspector();
+                updateMarkerTable();
                 setStatus(`Маркер ${marker.id} добавлен в ${marker.markerGroup}`);
             }
         } else {
@@ -1230,6 +1297,11 @@ async function loadAtlasScene() {
     window.Atlas = atlas;
     window.MarkerManager = markerManager;
 
+    markerManager.onMarkerRemoved = (id) => {
+    updateMarkerTable();
+    updateMarkerInspector();
+};
+
     createGroupControls();
     bindUIEvents();
     bindSceneEvents();
@@ -1264,8 +1336,8 @@ function onWindowResize() {
 const panelToggle = document.getElementById('panel-toggle');
 
 if (panelToggle) {
-  panelToggle.addEventListener('click', () => {
-    const collapsed = document.body.classList.toggle('panel-collapsed');
-    panelToggle.textContent = collapsed ? '»' : '«';
-  });
+    panelToggle.addEventListener('click', () => {
+        const collapsed = document.body.classList.toggle('panel-collapsed');
+        panelToggle.textContent = collapsed ? '»' : '«';
+    });
 }
