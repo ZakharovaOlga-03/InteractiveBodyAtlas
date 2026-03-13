@@ -86,13 +86,6 @@ export class AtlasScene {
         return this.loadModel(url, 1);
     }
 
-    async loadModel2(fileName) {
-        const url = fileName.startsWith('http')
-            ? fileName
-            : this.modelBaseUrl + fileName;
-        return this.loadModel(url, 2);
-    }
-
     async loadCsv(fileName) {
         const url = fileName.startsWith('http')
             ? fileName

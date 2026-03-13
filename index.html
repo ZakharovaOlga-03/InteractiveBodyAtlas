@@ -436,12 +436,19 @@
     });
 
     try {
-      await atlas.loadModel1('1-5.glb');
+      
+      await atlas.loadModel1('1-4.glb');
       console.log('✅ Model 1 loaded');
-      
-      await atlas.loadModel2('6-9.glb');
+
+      await atlas.loadModel1('5p1.glb');
       console.log('✅ Model 2 loaded');
-      
+
+      await atlas.loadModel1('5p2.glb');
+      console.log('✅ Model 3 loaded');
+
+      await atlas.loadModel1('6-9.glb');
+      console.log('✅ Model 4 loaded');
+    
       await atlas.loadCsv('visible_groups.csv');
       console.log('✅ CSV loaded');
       
