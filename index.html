@@ -40,27 +40,73 @@
   <!-- Библиотека теперь включает всю 3D логику -->
   <script type="module">
   import { AtlasScene } from './AtlasScene.js';
+  import { MarkerUI } from './MarkerUI.js';
 
-  // Модели лежат на GitHub
   const atlas = new AtlasScene('canvas-container', {
-    modelBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas/models/',
-    csvBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas/'
+    modelBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/models/',
+    csvBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/'
   });
 
-  // Или можно загружать конкретные файлы
-  await atlas.loadModel1('1-5.glb');  // загрузится с modelBaseUrl
-  await atlas.loadModel2('6-9.glb');  // полный URL работает тоже
-  await atlas.loadCsv('visible_groups.csv');
-  
-  window.atlas = atlas;
-</script>
-
-<!-- Или через atlas-script -->
-<script type="text/atlas-script" 
-        data-model-base="https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas/models/"
-        data-model1="1-5.glb" 
-        data-model2="6-9.glb">
-  scene.show_group("1:_Skeletal_system");
+  // Загружаем всё
+  try {
+    await atlas.loadModel1('1-5.glb');
+    console.log('✅ Model 1 loaded');
+    
+    await atlas.loadModel2('6-9.glb');
+    console.log('✅ Model 2 loaded');
+    
+    await atlas.loadCsv('visible_groups.csv');
+    console.log('✅ CSV loaded');
+    
+    // Прячем куб
+    atlas.cube.visible = false;
+    
+    // Инициализируем менеджер маркеров
+    const markerManager = atlas.initMarkerManager();
+    
+    // Инициализируем UI маркеров
+    const markerUI = new MarkerUI(atlas, markerManager);
+    
+    // Создаем группы в UI
+    markerUI.createGroupControls();
+    
+    // Добавляем обработчики кликов для маркеров
+    atlas.renderer.domElement.addEventListener('click', (event) => {
+        markerUI.hideMarkerPopup();
+        
+        if (!document.getElementById('click-marker-mode')?.checked) return;
+        
+        // Получаем пересечение с моделью
+        const rect = atlas.renderer.domElement.getBoundingClientRect();
+        const pointer = {
+            x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+            y: -((event.clientY - rect.top) / rect.height) * 2 + 1
+        };
+        
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(pointer, atlas.camera);
+        
+        const intersections = raycaster.intersectObjects(atlas.getMeshes());
+        if (intersections.length > 0) {
+            const hit = intersections[0];
+            const marker = markerManager.addMarkerFromIntersection(hit, {
+                ...markerUI.getMarkerStyleFromUI(),
+                groupName: markerUI.activeMarkerGroup || ''
+            });
+            if (marker) {
+                markerUI.updateMarkerTable();
+                markerUI.setStatus(`✅ Маркер добавлен на ${hit.object.name || 'mesh'}`);
+            }
+        }
+    });
+    
+    window.atlas = atlas;
+    window.markerManager = markerManager;
+    window.markerUI = markerUI;
+    
+  } catch (error) {
+    console.error('❌ Error loading assets:', error);
+  }
 </script>
 </body>
 
