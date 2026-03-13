@@ -168,7 +168,8 @@ export class AtlasScene {
         this.scene.add(ambientLight);
     }
 
-    // 🔥 Упрощенный метод построения индекса
+    // 🔥 Индексируем ВСЕ именованные узлы (Mesh, Group, Bone и т.д.),
+    // чтобы объекты из CSV находились и когда имя на родителе, и когда на меше.
     buildMeshIndex() {
         this.objectByName.clear();
         if (!this.currentModel) {
@@ -177,41 +178,40 @@ export class AtlasScene {
         }
 
         let meshCount = 0;
-        let namedMeshCount = 0;
+        let namedCount = 0;
 
         this.currentModel.traverse(c => {
             if (c.isMesh) meshCount++;
 
-            if (c.name) {
-                namedMeshCount++;
-                // 🔥 Сохраняем ТОЧНОЕ имя как есть (без изменений)
-                // Это ключевой момент - мы верим, что имена в CSV совпадают с именами в модели
-                this.objectByName.set(c.name, c);
-                
-                if (namedMeshCount <= 10) {
-                    console.log(`Индексирован: "${c.name}"`);
+            const name = (c.name && typeof c.name === 'string') ? c.name.trim() : '';
+            if (name) {
+                namedCount++;
+                this.objectByName.set(name, c);
+                if (namedCount <= 10) {
+                    console.log(`Индексирован: "${name}" (${c.type})`);
                 }
             }
         });
 
-        console.log(`buildMeshIndex: всего мешей: ${meshCount}, именованных: ${namedMeshCount}`);
+        console.log(`buildMeshIndex: всего мешей: ${meshCount}, именованных узлов: ${namedCount}`);
         console.log('Первые 10 индексированных имен:', Array.from(this.objectByName.keys()).slice(0, 10));
     }
 
-    // 🔥 Упрощенный поиск - только точное совпадение
+    // 🔥 Поиск: сначала точное совпадение, затем без учёта регистра
+    // (в модели может быть Femur_L, в CSV — Femur_l)
     findObject(csvName) {
-        if (!csvName) return null;
+        if (!csvName || typeof csvName !== 'string') return null;
+        const key = csvName.trim();
+        if (!key) return null;
 
-        // Прямой поиск по точному имени (без изменений)
-        const obj = this.objectByName.get(csvName);
-        
-        if (obj) {
-            console.log(`✅ Найден объект: "${csvName}"`);
-        } else {
-            console.log(`❌ Не найден: "${csvName}"`);
+        let obj = this.objectByName.get(key);
+        if (obj) return obj;
+
+        const keyLower = key.toLowerCase();
+        for (const [name, node] of this.objectByName) {
+            if (name.toLowerCase() === keyLower) return node;
         }
-        
-        return obj || null;
+        return null;
     }
 
     showGroup(groupName) {
@@ -230,14 +230,7 @@ export class AtlasScene {
             const obj = this.findObject(itemName);
             if (obj) {
                 foundCount++;
-                obj.visible = true;
-
-                // Показываем всех родителей
-                let parent = obj.parent;
-                while (parent) {
-                    parent.visible = true;
-                    parent = parent.parent;
-                }
+                this.setVisibleWithAncestorsAndDescendants(obj, true);
             }
         });
         
@@ -248,17 +241,21 @@ export class AtlasScene {
     showItem(itemName){
         const obj = this.findObject(itemName);
         if (obj) {
-            obj.visible = true;
-
-            // Показываем всех родителей
-            let parent = obj.parent;
-            while (parent) {
-                parent.visible = true;
-                parent = parent.parent;
-            }
+            this.setVisibleWithAncestorsAndDescendants(obj, true);
             return true;
         }
         return false;
+    }
+
+    // Показ/скрытие узла, всех его предков и всего поддерева (иначе после hideAll потомки остаются скрытыми)
+    setVisibleWithAncestorsAndDescendants(obj, visible) {
+        if (!obj) return;
+        obj.traverse(c => { c.visible = visible; });
+        let parent = obj.parent;
+        while (parent) {
+            parent.visible = visible;
+            parent = parent.parent;
+        }
     }
 
     hideAll() {
