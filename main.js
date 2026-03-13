@@ -1,28 +1,10 @@
-import CSVGroupsManager, {
-  isNumberedGroup,
-  isEditableSubgroup,
-  toDisplayName,
-  toRawName,
-  parseCSVLine,
-  parseCSV,
-  serializeCSV,
-  selectFile,
-  createSceneConsoleAPI
-} from './body-atlas.js';
+// main.js — точка входа для CDN
+import { CSVGroupsManager } from './csv-groups.js';
+import { AtlasScene } from './AtlasScene.js';
 
-// Экспортируем всё, что нужно пользователям
-export {
-  CSVGroupsManager,
-  isNumberedGroup,
-  isEditableSubgroup,
-  toDisplayName,
-  toRawName,
-  parseCSVLine,
-  parseCSV,
-  serializeCSV,
-  selectFile,
-  createSceneConsoleAPI
-};
+// Реэкспортируем всё
+export { CSVGroupsManager, AtlasScene };
+export * from './csv-groups.js';
 
-// Экспорт по умолчанию для удобства
-export default CSVGroupsManager;
+// Для обратной совместимости
+export default { CSVGroupsManager, AtlasScene };

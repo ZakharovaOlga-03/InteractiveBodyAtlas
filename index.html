@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
   <meta charset="UTF-8" />
   <title>Атлас — только модель</title>
@@ -12,247 +13,55 @@
     }
   </script>
   <style>
-    html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
-    #canvas-container { width: 100%; height: 100%; }
-    canvas { display: block; width: 100%; height: 100%; }
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
   </style>
 </head>
+
 <body>
   <div id="canvas-container"></div>
 
-  <!-- Библиотека csv-groups подключается через ES module (нужен сервер) -->
+  <!-- Библиотека теперь включает всю 3D логику -->
   <script type="module">
-  import * as THREE from 'three';
-  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-  import { CSVGroupsManager, createSceneConsoleAPI } from './csv-groups.js';
+  import { AtlasScene } from './AtlasScene.js';
 
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x888888);
-  const container = document.getElementById('canvas-container');
-  const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
-  camera.position.set(0, 0, 3);
-  camera.lookAt(0, 0, 0);
-
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.setPixelRatio(window.devicePixelRatio);
-  container.appendChild(renderer.domElement);
-
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-
-  // Создаем контейнер, который будет двигаться с камерой
-const lightHolder = new THREE.Object3D();
-scene.add(lightHolder); // Добавляем в сцену, но позицию будем обновлять вручную
-
-// Добавляем свет в контейнер
-const cameraLight = new THREE.PointLight(0xffffff, 1.5);
-cameraLight.position.set(0, 0, 0); // Относительно камеры: сверху и спереди
-lightHolder.add(cameraLight);
-
-// Добавляем второй свет для подсветки снизу
-//const bottomLight = new THREE.PointLight(0x4466ff, 0.5);
-//bottomLight.position.set(0, -1, 1); // Снизу относительно камеры
-//lightHolder.add(bottomLight);
-
-// Добавляем окружающий свет (не двигается)
-//const ambientLight = new THREE.AmbientLight(0x404060);
-//scene.add(ambientLight);
-
-// --- Заполняющие статические источники (для теней и объема) ---
-//const staticLight1 = new THREE.PointLight(0xffaa66, 0.3);
-//staticLight1.position.set(3, 2, 3);
-//scene.add(staticLight1);
-
-//const staticLight2 = new THREE.PointLight(0x66aaff, 0.3);
-//staticLight2.position.set(-3, 1, 3);
-//scene.add(staticLight2);
-
-  const cube = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshStandardMaterial({ color: 0x4488ff })
-  );
-  scene.add(cube);
-
-  let currentModel = null;
-  let modelPart1 = null;
-  let modelPart2 = null;
-  const objectByName = new Map();
-  const loader = new GLTFLoader();
-
-  function buildMeshIndex(model) {
-    objectByName.clear();
-    model.traverse(c => {
-      if (c.name) objectByName.set(c.name.toLowerCase().trim(), c);
-    });
-  }
-
-  function csvKey(n) { return n.toLowerCase().trim().replace(/\.([a-z0-9]+)$/, '$1'); }
-  function findObject(csvName) {
-    const k = csvKey(csvName);
-    if (objectByName.has(k)) return objectByName.get(k);
-    const u = k.replace(/\s+/g, '_'); if (objectByName.has(u)) return objectByName.get(u);
-    const s = k.replace(/_/g, ' ');  if (objectByName.has(s)) return objectByName.get(s);
-    return null;
-  }
-
-  function hideAll(model) { model.traverse(c => c.visible = false); }
-
-  const csvManager = new CSVGroupsManager();
-  window.csvManager = csvManager;
-
-  function getGroupByName(name) {
-    const all = [...csvManager.getBaseGroups(), ...csvManager.getSubgroups()];
-    return all.find(g => g.rawName === name) || null;
-  }
-
-  function finishModelLoad() {
-    if (!currentModel) return;
-    requestAnimationFrame(() => {
-      const box = new THREE.Box3().setFromObject(currentModel);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const md = Math.max(size.x, size.y, size.z);
-      camera.position.set(center.x, center.y, center.z + md * 1.2);
-      camera.lookAt(center.x, center.y, center.z);
-      camera.far = md * 10;
-      camera.updateProjectionMatrix();
-      hideAll(currentModel);
-      if (typeof runAtlasScripts === 'function') runAtlasScripts(true);
-    });
-  }
-
-  function loadCsvByName(name) {
-    return fetch(name)
-      .then(res => { if (!res.ok) throw new Error('Файл не найден: ' + name); return res.text(); })
-      .then(text => {
-        csvManager.loadFromText(text, name);
-      });
-  }
-
-  function loadModel1ByName(name) {
-    return new Promise((resolve, reject) => {
-      loader.load(name, gltf => {
-        cube.visible = false;
-        if (!currentModel) { currentModel = new THREE.Group(); scene.add(currentModel); }
-        if (modelPart1) currentModel.remove(modelPart1);
-        modelPart1 = gltf.scene;
-        currentModel.add(modelPart1);
-        buildMeshIndex(currentModel);
-        finishModelLoad();
-        resolve();
-      }, undefined, reject);
-    });
-  }
-
-  function loadModel2ByName(name) {
-    return new Promise((resolve, reject) => {
-      loader.load(name, gltf => {
-        cube.visible = false;
-        if (!currentModel) { currentModel = new THREE.Group(); scene.add(currentModel); }
-        if (modelPart2) currentModel.remove(modelPart2);
-        modelPart2 = gltf.scene;
-        currentModel.add(modelPart2);
-        buildMeshIndex(currentModel);
-        finishModelLoad();
-        resolve();
-      }, undefined, reject);
-    });
-  }
-
-  const api = createSceneConsoleAPI({
-    scene,
-    findObject,
-    getGroupByName,
-    csvManager,
-    triggerLoadCsv: () => {},
-    triggerLoadModel: () => {},
-    triggerLoadModel2: () => {},
-    loadCsvByName,
-    loadModel1ByName,
-    loadModel2ByName,
+  // Модели лежат на GitHub
+  const atlas = new AtlasScene('canvas-container', {
+    modelBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas/models/',
+    csvBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas/'
   });
-  Object.assign(scene, api);
-  window.scene = scene;
-  window.THREE = THREE;
 
-  function resolvePath(base, name) {
-    if (!name) return name;
-    if (name.startsWith('http://') || name.startsWith('https://') || name.startsWith('/')) return name;
-    if (!base) return name;
-    const dir = base.endsWith('/') ? base : base + '/';
-    return dir + name;
-  }
+  // Или можно загружать конкретные файлы
+  await atlas.loadModel1('1-5.glb');  // загрузится с modelBaseUrl
+  await atlas.loadModel2('6-9.glb');  // полный URL работает тоже
+  await atlas.loadCsv('visible_groups.csv');
+  
+  window.atlas = atlas;
+</script>
 
-  async function runAtlasScripts(executeOnly) {
-    const scripts = document.querySelectorAll('script[type="text/atlas-script"]');
-    for (const el of scripts) {
-      if (!executeOnly) {
-        const base = (el.getAttribute('data-base') || '').trim();
-        const modelBase = (el.getAttribute('data-model-base') || '').trim();
-        const csv = resolvePath(base, (el.getAttribute('data-csv') || '').trim());
-        const model1 = resolvePath(modelBase, (el.getAttribute('data-model1') || '').trim());
-        const model2 = resolvePath(modelBase, (el.getAttribute('data-model2') || '').trim());
-        try {
-          if (csv) await loadCsvByName(csv);
-          if (model1) await loadModel1ByName(model1);
-          if (model2) await loadModel2ByName(model2);
-        } catch (err) {
-          console.error('Ошибка загрузки по параметрам atlas-script:', err);
-        }
-      }
-      const code = el.textContent;
-      if (!code.trim()) continue;
-      try {
-        (new Function('scene', 'csvManager', 'THREE', code))(window.scene, window.csvManager, window.THREE);
-      } catch (err) {
-        console.error('Ошибка в atlas-script:', err);
-      }
-    }
-  }
-  runAtlasScripts();
-
-  function animate() {
-    requestAnimationFrame(animate);
-
-    if (camera && lightHolder) {
-        // Копируем позицию камеры
-        lightHolder.position.copy(camera.position);
-        
-        // Копируем поворот камеры (чтобы свет оставался ориентированным относительно камеры)
-        lightHolder.quaternion.copy(camera.quaternion);
-    }
-
-    controls.update();
-    renderer.render(scene, camera);
-  }
-  animate();
-
-  window.addEventListener('resize', () => {
-    const w = container.clientWidth, h = container.clientHeight;
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-  });
-  </script>
-
-  <!--
-    Рабочий пример: CSV рядом с HTML, модели в папке models/ (data-model-base="models/").
-    Загружаются atlas.csv из текущей папки, part1.glb и part2.glb из models/.
-  -->
-  <script type="text/atlas-script" data-csv="visible_groups.csv" data-model-base="models/" data-model1="1-5.glb" data-model2="6-9.glb">
-    // Показать группы по имени (rawName из CSV)
-    scene.show_group("1:_Skeletal_system");
-    //scene.show_group("Bones_of_pelvic_girdle.g");
-
-    // Примеры других команд (раскомментируйте при необходимости):
-    // scene.hide_group("Bones_of_free_part_of_lower_limb.g");
-    // scene.hide_element("Femur.l");
-     var mat = new THREE.MeshStandardMaterial({ color: 0xff6600, metalness: 0.0, roughness: 0.4 });
-     scene.change_mat("1:_Skeletal_system", mat);
-    // console.log(scene.get_groups(), scene.get_items());
-  </script>
+<!-- Или через atlas-script -->
+<script type="text/atlas-script" 
+        data-model-base="https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas/models/"
+        data-model1="1-5.glb" 
+        data-model2="6-9.glb">
+  scene.show_group("1:_Skeletal_system");
+</script>
 </body>
+
 </html>
