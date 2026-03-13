@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
   <meta charset="UTF-8" />
   <title>Атлас — только модель</title>
@@ -21,7 +22,7 @@
       --field: #f9f9f9;
       --muted: #4f4f4f;
       --dark-panel-bg: rgba(18, 20, 32, 0.94);
-      --dark-panel-border: rgba(255,255,255,0.12);
+      --dark-panel-border: rgba(255, 255, 255, 0.12);
       --dark-text: #f4f7ff;
       --dark-muted: #aab6d3;
       --dark-accent: #7eb6ff;
@@ -30,11 +31,12 @@
       --toggle-size: 40px;
     }
 
-    * { 
-      box-sizing: border-box; 
+    * {
+      box-sizing: border-box;
     }
 
-    html, body {
+    html,
+    body {
       margin: 0;
       padding: 0;
       overflow: hidden;
@@ -207,8 +209,8 @@
       margin-bottom: 10px;
     }
 
-    #tools-panel .action-row:last-child { 
-      margin-bottom: 0; 
+    #tools-panel .action-row:last-child {
+      margin-bottom: 0;
     }
 
     #tools-panel .action-label,
@@ -283,8 +285,8 @@
       min-height: 74px;
     }
 
-    #tools-panel .field-row { 
-      margin-bottom: 8px; 
+    #tools-panel .field-row {
+      margin-bottom: 8px;
     }
 
     #tools-panel .button-row {
@@ -292,8 +294,8 @@
       gap: 8px;
     }
 
-    #tools-panel .button-row > * { 
-      flex: 1; 
+    #tools-panel .button-row>* {
+      flex: 1;
     }
 
     #tools-panel #stored-marker-groups-list {
@@ -330,13 +332,13 @@
       padding: 8px;
       border: 2px solid var(--line);
       border-radius: 4px;
-      background: rgba(255,255,255,0.35);
+      background: rgba(255, 255, 255, 0.35);
       cursor: pointer;
     }
 
     #tools-panel .marker-row:hover,
     #tools-panel .marker-row.selected {
-      background: rgba(255,255,255,0.55);
+      background: rgba(255, 255, 255, 0.55);
       border-color: var(--line);
     }
 
@@ -359,7 +361,7 @@
       border: 1px solid var(--dark-panel-border);
       border-radius: 18px;
       padding: 16px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
       backdrop-filter: blur(10px);
       color: var(--dark-text);
     }
@@ -374,15 +376,15 @@
     #group-panel input,
     #group-panel select {
       width: 100%;
-      background: rgba(255,255,255,0.08);
+      background: rgba(255, 255, 255, 0.08);
       color: var(--dark-text);
-      border: 1px solid rgba(255,255,255,0.12);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 8px;
       padding: 8px 10px;
     }
 
     #group-panel button:hover {
-      background: rgba(255,255,255,0.14);
+      background: rgba(255, 255, 255, 0.14);
     }
 
     #group-panel .button-row {
@@ -391,8 +393,8 @@
       margin-bottom: 8px;
     }
 
-    #group-panel .button-row > * { 
-      flex: 1; 
+    #group-panel .button-row>* {
+      flex: 1;
     }
 
     #group-panel .group-row {
@@ -403,8 +405,8 @@
       padding: 4px 0;
     }
 
-    #group-panel .group-row input[type="checkbox"] { 
-      width: auto; 
+    #group-panel .group-row input[type="checkbox"] {
+      width: auto;
     }
 
     #group-panel label,
@@ -415,11 +417,12 @@
       font-size: 12px;
     }
 
-    .toggle-hidden { 
-      display: none; 
+    .toggle-hidden {
+      display: none;
     }
   </style>
 </head>
+
 <body>
   <div id="info">Загрузка...</div>
   <button id="panel-toggle" type="button" title="Скрыть / показать панель">«</button>
@@ -439,7 +442,7 @@
       // 🔥 Загружаем 4 модели последовательно
       console.log('📥 Загрузка модели 1/4...');
       await atlas.loadModel('p1.glb', 0);
-      
+
       console.log('📥 Загрузка модели 2/4...');
       await atlas.loadModel('p2.glb', 1);
 
@@ -448,73 +451,84 @@
 
       console.log('📥 Загрузка модели 2/4...');
       await atlas.loadModel('p4.glb', 3);
-      
-      
-      
+
+      console.log('📥 Загрузка модели 1/4...');
+      await atlas.loadModel('p5.glb', 4);
+
+      console.log('📥 Загрузка модели 2/4...');
+      await atlas.loadModel('p6.glb', 5);
+
+      console.log('📥 Загрузка модели 2/4...');
+      await atlas.loadModel('p7.glb', 6);
+
+      console.log('📥 Загрузка модели 2/4...');
+      await atlas.loadModel('p8.glb', 7);
+
+
+
       console.log('✅ Все 4 модели загружены');
-      
+
       // Загружаем CSV
       await atlas.loadCsv('visible_groups.csv');
       console.log('✅ CSV loaded');
 
-      // Проверим конкретные имена
-atlas.findObject('(Abdominal_part_of_pectoralis_major_muscle).ol');
-atlas.findObject('Abductor_digiti_minimi_of_foot.el');
 
-// Посмотрим, какие вообще есть похожие имена в модели
-const searchTerm = 'abductor';
-const similar = Array.from(atlas.objectByName.keys())
-    .filter(key => key.includes(searchTerm));
-console.log('Все имена с "abductor":', similar);
 
-// Если найдем объект, покажем его и сделаем видимым
-const obj = atlas.findObject('Abductor_digiti_minimi_of_foot.l'); // пробуем стандартный суффикс
-if (obj) {
-    console.log('Найден объект:', obj);
-    obj.visible = true;
-    // Показываем родителей
-    let parent = obj.parent;
-    while (parent) {
-        parent.visible = true;
-        parent = parent.parent;
-    }
-}
-      
+      // Посмотрим, какие вообще есть похожие имена в модели
+      const searchTerm = 'abductor';
+      const similar = Array.from(atlas.objectByName.keys())
+        .filter(key => key.includes(searchTerm));
+      console.log('Все имена с "abductor":', similar);
+
+      // Если найдем объект, покажем его и сделаем видимым
+      const obj = atlas.findObject('Abductor_digiti_minimi_of_foot.l'); // пробуем стандартный суффикс
+      if (obj) {
+        console.log('Найден объект:', obj);
+        obj.visible = true;
+        // Показываем родителей
+        let parent = obj.parent;
+        while (parent) {
+          parent.visible = true;
+          parent = parent.parent;
+        }
+      }
+
       // Инициализируем менеджер маркеров
-      const markerManager = new MarkerManager({ 
-        scene: atlas.scene, 
-        atlas: atlas 
+      const markerManager = new MarkerManager({
+        scene: atlas.scene,
+        atlas: atlas
       });
-      
+
       atlas.markerManager = markerManager;
-      
+
       // Инициализируем UI маркеров
       const markerUI = new MarkerUI(atlas, markerManager);
-      
+
       // Создаем панели
       markerUI.createGroupControls();
-      
+
       // Найди проблемную группу
-const problemGroup = atlas.csvManager.getAllGroups().find(g => g.rawName === '2:_Muscular_insertions');
-console.log('Проблемная группа:', problemGroup);
+      const problemGroup = atlas.csvManager.getAllGroups().find(g => g.rawName === '2:_Muscular_insertions');
+      console.log('Проблемная группа:', problemGroup);
 
-// Посмотри первые несколько элементов группы
-console.log('Элементы группы (первые 10):', problemGroup.items.slice(0, 10));
+      // Посмотри первые несколько элементов группы
+      console.log('Элементы группы (первые 10):', problemGroup.items.slice(0, 10));
 
-// Проверь, есть ли эти элементы в индексе
-problemGroup.items.slice(0, 5).forEach(itemName => {
-    const found = atlas.findObject(itemName);
-    console.log(`Элемент "${itemName}":`, found ? '✅ НАЙДЕН' : '❌ НЕ НАЙДЕН');
-});
-      
+      // Проверь, есть ли эти элементы в индексе
+      problemGroup.items.slice(0, 5).forEach(itemName => {
+        const found = atlas.findObject(itemName);
+        console.log(`Элемент "${itemName}":`, found ? '✅ НАЙДЕН' : '❌ НЕ НАЙДЕН');
+      });
+
       window.atlas = atlas;
       window.markerManager = markerManager;
       window.markerUI = markerUI;
-      
+
     } catch (error) {
       console.error('❌ Error loading assets:', error);
       document.getElementById('info').textContent = 'Ошибка загрузки: ' + error.message;
     }
   </script>
 </body>
+
 </html>
