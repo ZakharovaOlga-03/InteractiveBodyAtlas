@@ -1,4 +1,68 @@
-// MarkerManager.js — управление маркерами
+/**
+ * MarkerManager.js — управление 3D-маркерами на сцене атласа.
+ *
+ * Создаёт группу маркеров (сфера/куб), привязывает их к мешам модели (localPosition)
+ * или к мировым координатам. Поддерживает группы маркеров (markerGroup), видимость
+ * по группам, экспорт/импорт JSON, режим «поверх всего» (alwaysVisible). Требует
+ * ссылку на сцену и atlas (findObject, getIdByNode, getNodeById).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * ОГЛАВЛЕНИЕ (поиск по Ctrl+F по заголовкам или именам)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * КЛАСС MarkerManager
+ *   Конструктор:
+ *     constructor({ scene, atlas })
+ *   Внутренние (приватные):
+ *     _makeMaterial(style)              — MeshPhysicalMaterial по стилю
+ *     _getGeometry(shape)               — sphere | cube
+ *     _createSprite(style)              — меш-маркер
+ *     _sanitizeGroupName(name)          — безопасное имя группы
+ *     _sanitizeMarkerName(name, fallback)
+ *     _vectorToObject(v)                — Vector3 → { x, y, z }
+ *     _normalizeMarker(input)           — объект маркера с полями по умолчанию
+ *     _attachSprite(marker)             — создать спрайт и добавить в group
+ *     _updateMarkerWorldPosition(marker) — позиция по elementId + localPosition
+ *     _applyMarkerVisibility(marker)    — учёт visible и видимости группы
+ *     _parseVec3Input(value)            — строка "x y z" → { x, y, z }
+ *     _buildUniqueMarkerKey(baseName, targetObj)
+ *     _loadLegacyArrayFormat(arr)       — загрузка формата массива
+ *   Группы маркеров:
+ *     ensureMarkerGroup(groupName)      — создать/вернуть группу
+ *     createMarkerGroup(groupName)
+ *     getMarkerGroups()                 — массив имён групп
+ *     setMarkerGroupVisibility(groupName, visible)
+ *     renameMarkerGroup(oldName, newName)
+ *     deleteMarkerGroup(groupName)      — удалить группу и все маркеры в ней
+ *   Видимость и стиль:
+ *     setMarkerAlwaysVisible(id, alwaysVisible)
+ *     setGroupAlwaysVisible(groupName, alwaysVisible)
+ *     refreshVisibility()               — применить видимость ко всем маркерам
+ *     update()                          — _updateMarkerWorldPosition + видимость
+ *     toggleMarkerVisibility(id)
+ *     setMarkerVisibility(id, visible)
+ *   Добавление и удаление:
+ *     addMarkerFromIntersection(intersection, style) — по клику на меш
+ *     addMarkerAtWorldPosition(worldPosition, style)
+ *     addMarkerFromCoordinates(coords, style)       — строка "x y z"
+ *     removeMarker(id)
+ *     clear()                           — удалить все маркеры
+ *   Редактирование:
+ *     updateMarkerProperties(id, properties)        — цвет, scale, comment, …
+ *   Поиск и экспорт:
+ *     getMarkerBySprite(sprite)         — маркер по userData.markerId
+ *     exportGroupedJSON()               — объект { groupName: { markerKey: payload } }
+ *     toCSV()                           — CSV-строка маркеров
+ *   Загрузка:
+ *     loadFromJSON(data)                — объект групп или массив (legacy)
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
+// =============================================================================
+// КЛАСС MarkerManager
+// =============================================================================
+
 import * as THREE from 'three';
 
 export class MarkerManager {
@@ -30,6 +94,10 @@ export class MarkerManager {
         this.tempVec3 = new THREE.Vector3();
         this.tempVec3b = new THREE.Vector3();
     }
+
+    // =========================================================================
+    // ВНУТРЕННИЕ: МАТЕРИАЛ, ГЕОМЕТРИЯ, СПРАЙТ
+    // =========================================================================
 
     _makeMaterial(style = {}) {
         // Определяем, нужно ли alwaysVisible (поверх всего)
@@ -71,6 +139,10 @@ export class MarkerManager {
         
         return mesh;
     }
+
+    // =========================================================================
+    // ГРУППЫ МАРКЕРОВ
+    // =========================================================================
 
     ensureMarkerGroup(groupName) {
         const safe = this._sanitizeGroupName(groupName);
@@ -119,6 +191,10 @@ export class MarkerManager {
         return true;
     }
 
+    // =========================================================================
+    // САНИТИЗАЦИЯ И НОРМАЛИЗАЦИЯ
+    // =========================================================================
+
     _sanitizeGroupName(name) {
         const cleaned = String(name || '').trim().replace(/\s+/g, '_');
         return cleaned || 'group_1';
@@ -165,7 +241,10 @@ export class MarkerManager {
         return marker;
     }
 
-    // Добавим метод для переключения режима alwaysVisible
+    // =========================================================================
+    // ВИДИМОСТЬ И РЕЖИМ «ПОВЕРХ ВСЕГО»
+    // =========================================================================
+
     setMarkerAlwaysVisible(id, alwaysVisible) {
         const marker = this.markers.find((m) => m.id === id);
         if (!marker) return false;
@@ -209,6 +288,9 @@ export class MarkerManager {
         return count;
     }
 
+    // =========================================================================
+    // ПРИВЯЗКА СПРАЙТА И МИРОВАЯ ПОЗИЦИЯ
+    // =========================================================================
 
     _attachSprite(marker) {
         marker.sprite = this._createSprite(marker);
@@ -289,6 +371,10 @@ _attachSprite(marker) {
     this._applyMarkerVisibility(marker);
 }
 
+    // =========================================================================
+    // ВИДИМОСТЬ МАРКЕРОВ И ОБНОВЛЕНИЕ
+    // =========================================================================
+
     _applyMarkerVisibility(marker) {
         if (!marker?.sprite) return;
         const markerGroupVisible = this.markerGroupVisibility[marker.markerGroup] !== false;
@@ -321,6 +407,10 @@ _attachSprite(marker) {
         this._applyMarkerVisibility(marker);
         return true;
     }
+
+    // =========================================================================
+    // ДОБАВЛЕНИЕ И УДАЛЕНИЕ МАРКЕРОВ
+    // =========================================================================
 
     addMarkerFromIntersection(intersection, style = {}) {
     const mesh = intersection?.object;
@@ -415,6 +505,10 @@ _attachSprite(marker) {
         this._applyMarkerVisibility(marker);
         return true;
     }
+
+    // =========================================================================
+    // ПОИСК, ЭКСПОРТ И ЗАГРУЗКА
+    // =========================================================================
 
     getMarkerBySprite(sprite) {
         const id = sprite?.userData?.markerId;

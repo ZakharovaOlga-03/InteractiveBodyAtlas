@@ -438,10 +438,16 @@
     try {
       // 🔥 Загружаем 4 модели последовательно
       console.log('📥 Загрузка модели 1/4...');
-      await atlas.loadModel('1-5.glb', 0);
+      await atlas.loadModel('p1.glb', 0);
       
       console.log('📥 Загрузка модели 2/4...');
-      await atlas.loadModel('6-9.glb', 1);
+      await atlas.loadModel('p2.glb', 1);
+
+      console.log('📥 Загрузка модели 2/4...');
+      await atlas.loadModel('p3.glb', 2);
+
+      console.log('📥 Загрузка модели 2/4...');
+      await atlas.loadModel('p4.glb', 3);
       
       
       

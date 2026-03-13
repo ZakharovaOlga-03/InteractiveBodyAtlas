@@ -38,10 +38,8 @@ export class AtlasScene {
         this.loader = new GLTFLoader();
 
         // Хранилище объектов
-        this.objectByName = new Map();
+        this.objectByName = new Map(); // КЛЮЧ: точное имя из модели
         this.currentModel = null;
-        
-        // 🔥 Массив для хранения всех загруженных частей модели
         this.modelParts = [];
 
         // Менеджер CSV
@@ -106,6 +104,7 @@ export class AtlasScene {
                 // Применяем базовый материал ко всем мешам
                 this.applyBaseMaterialToAllMeshes();
 
+                // 🔥 Строим индекс с ТОЧНЫМИ именами
                 this.buildMeshIndex();
 
                 // Скрываем все элементы после загрузки
@@ -128,7 +127,7 @@ export class AtlasScene {
         });
     }
 
-    // 🔥 Для обратной совместимости (если нужны отдельные методы)
+    // Для обратной совместимости
     async loadModel1(fileName) {
         return this.loadModel(fileName, 0);
     }
@@ -169,6 +168,7 @@ export class AtlasScene {
         this.scene.add(ambientLight);
     }
 
+    // 🔥 Упрощенный метод построения индекса
     buildMeshIndex() {
         this.objectByName.clear();
         if (!this.currentModel) {
@@ -184,56 +184,34 @@ export class AtlasScene {
 
             if (c.name) {
                 namedMeshCount++;
-                const originalName = c.name;
-
-                // Сохраняем оригинальное имя
-                this.objectByName.set(originalName.toLowerCase().trim(), c);
-
-                // Генерируем все возможные варианты имени
-                const variations = this.generateNameVariations(originalName);
-
-                variations.forEach(variation => {
-                    if (!this.objectByName.has(variation)) {
-                        this.objectByName.set(variation, c);
-                    }
-                });
+                // 🔥 Сохраняем ТОЧНОЕ имя как есть (без изменений)
+                // Это ключевой момент - мы верим, что имена в CSV совпадают с именами в модели
+                this.objectByName.set(c.name, c);
+                
+                if (namedMeshCount <= 10) {
+                    console.log(`Индексирован: "${c.name}"`);
+                }
             }
         });
 
         console.log(`buildMeshIndex: всего мешей: ${meshCount}, именованных: ${namedMeshCount}`);
+        console.log('Первые 10 индексированных имен:', Array.from(this.objectByName.keys()).slice(0, 10));
     }
 
-    generateNameVariations(name) {
-        const variations = new Set();
-        const lower = name.toLowerCase().trim();
-
-        variations.add(lower);
-        variations.add(lower.replace(/\.(l|r)$/i, '$1'));
-        variations.add(lower.replace(/([lr])$/i, '.$1'));
-        variations.add(lower.replace(/_/g, ' '));
-        variations.add(lower.replace(/\s+/g, '_'));
-
-        if (lower.endsWith('l')) {
-            variations.add(lower.slice(0, -1) + '.l');
-            variations.add(lower.slice(0, -1) + ' left');
-            variations.add(lower.slice(0, -1) + '_left');
-        }
-        if (lower.endsWith('r')) {
-            variations.add(lower.slice(0, -1) + '.r');
-            variations.add(lower.slice(0, -1) + ' right');
-            variations.add(lower.slice(0, -1) + '_right');
-        }
-
-        variations.add(lower.replace(/[^a-z0-9]/g, ''));
-
-        return Array.from(variations);
-    }
-
+    // 🔥 Упрощенный поиск - только точное совпадение
     findObject(csvName) {
         if (!csvName) return null;
 
-        const searchKey = csvName.toLowerCase().trim();
-        return this.objectByName.get(searchKey) || null;
+        // Прямой поиск по точному имени (без изменений)
+        const obj = this.objectByName.get(csvName);
+        
+        if (obj) {
+            console.log(`✅ Найден объект: "${csvName}"`);
+        } else {
+            console.log(`❌ Не найден: "${csvName}"`);
+        }
+        
+        return obj || null;
     }
 
     showGroup(groupName) {
@@ -244,9 +222,14 @@ export class AtlasScene {
             return false;
         }
 
+        console.log(`Показываем группу "${groupName}" (${group.items.length} элементов)`);
+        
+        let foundCount = 0;
+        
         group.items.forEach(itemName => {
             const obj = this.findObject(itemName);
             if (obj) {
+                foundCount++;
                 obj.visible = true;
 
                 // Показываем всех родителей
@@ -257,11 +240,26 @@ export class AtlasScene {
                 }
             }
         });
-
+        
+        console.log(`Группа "${groupName}": найдено ${foundCount}/${group.items.length} объектов`);
         return true;
     }
 
-    
+    showItem(itemName){
+        const obj = this.findObject(itemName);
+        if (obj) {
+            obj.visible = true;
+
+            // Показываем всех родителей
+            let parent = obj.parent;
+            while (parent) {
+                parent.visible = true;
+                parent = parent.parent;
+            }
+            return true;
+        }
+        return false;
+    }
 
     hideAll() {
         if (this.currentModel) {
@@ -388,6 +386,10 @@ export class AtlasScene {
             },
             hide_element: (elementName) => {
                 this.hideElement(elementName);
+                return api;
+            },
+            show_item: (itemName) => {
+                this.showItem(itemName);
                 return api;
             },
             change_mat: (target, material, options = {}) => {
@@ -519,19 +521,6 @@ export class AtlasScene {
             console.log(`Родители:`, this.getParentChain(obj));
         } else {
             console.log(`❌ НЕ НАЙДЕН`);
-
-            const searchLower = csvName.toLowerCase();
-            const similar = Array.from(this.objectByName.keys())
-                .filter(key => {
-                    const k1 = key.replace(/[^a-z0-9]/g, '');
-                    const s1 = searchLower.replace(/[^a-z0-9]/g, '');
-                    return k1.includes(s1) || s1.includes(k1);
-                })
-                .slice(0, 10);
-
-            if (similar.length > 0) {
-                console.log('Похожие имена в модели:', similar);
-            }
         }
         return obj;
     }
@@ -559,11 +548,7 @@ export class AtlasScene {
     }
 
     getIdByNode(node) {
-        if (node.name) {
-            const name = node.name.toLowerCase().trim();
-            return name;
-        }
-        return node.uuid || '';
+        return node.name || node.uuid || '';
     }
 
     getNodeById(id) {
