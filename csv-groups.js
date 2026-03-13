@@ -387,6 +387,28 @@ export class CSVGroupsManager {
     return { success: true };
   }
 
+  applyMaterialToGroup(groupRawName, material, findObject) {
+      const group = [...this.baseGroups, ...this.subgroups].find(g => g.rawName === groupRawName);
+      if (!group || !group.items) return false;
+      
+      group.items.forEach(itemName => {
+          const obj = findObject(itemName);
+          if (obj) {
+              obj.traverse(child => {
+                  if (child.isMesh) {
+                      if (Array.isArray(child.material)) {
+                          child.material.forEach((_, i) => child.material[i] = material);
+                      } else {
+                          child.material = material;
+                      }
+                  }
+              });
+          }
+      });
+      return true;
+  }
+
+
   // ---------- Видимость (в памяти, не сохраняется в CSV) ----------
 
   /** Установить видимость одного элемента. */
@@ -559,23 +581,32 @@ export function createSceneConsoleAPI(opts) {
   }
 
   return {
-    /**
-     * Показать группу по имени (базовую или подгруппу).
-     * Пример: scene.show_group("Bones_of_free_part_of_lower_limb.g")
-     * @param {string} groupName — rawName группы (например "1:1:_Skeletal_system" или "Bones_of_pelvic_girdle.g")
-     */
-    show_group(groupName) {
-      const group = getGroupByName && getGroupByName(String(groupName));
-      if (!group || !group.items) {
-        console.warn('Группа не найдена:', groupName);
-        return this;
-      }
-      group.items.forEach((itemName) => {
-        const obj = findObject(itemName);
-        if (obj) showObj(obj);
-      });
-      return this;
-    },
+      // ===== НОВЫЙ МЕТОД =====
+      apply_material_to_group: function(groupName, material) {
+          if (!csvManager) return this;
+          const group = getGroupByName && getGroupByName(String(groupName));
+          if (!group) { console.warn('Группа не найдена:', groupName); return this; }
+          csvManager.applyMaterialToGroup(group.rawName, material, findObject);
+          return this;
+      },
+      
+      /**
+       * Показать группу по имени (базовую или подгруппу).
+       * Пример: scene.show_group("Bones_of_free_part_of_lower_limb.g")
+       * @param {string} groupName — rawName группы (например "1:1:_Skeletal_system" или "Bones_of_pelvic_girdle.g")
+       */
+      show_group: function(groupName) {
+          const group = getGroupByName && getGroupByName(String(groupName));
+          if (!group || !group.items) {
+              console.warn('Группа не найдена:', groupName);
+              return this;
+          }
+          group.items.forEach((itemName) => {
+              const obj = findObject(itemName);
+              if (obj) showObj(obj);
+          });
+          return this;
+      },
 
     /**
      * Скрыть группу.
