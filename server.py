@@ -13,7 +13,7 @@ class Handler(SimpleHTTPRequestHandler):
     }
 
 
-def main(host: str = "127.0.0.1", port: int = 5175) -> None:
+def main(host: str = "127.0.0.1", port: int = 5178) -> None:
     server = ThreadingHTTPServer((host, port), Handler)
     print(f"Serving on http://{host}:{port}/")
     server.serve_forever()
