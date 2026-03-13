@@ -4,8 +4,10 @@ export class MarkerUI {
         this.atlas = atlasScene;
         this.markerManager = markerManager;
         this.selectedElementId = '';
-        this.activeMarkerGroup = '';
+        this.activeMarkerGroup = 'group_1';
         this.groupVisibility = {};
+        this.panelCollapsed = false;
+        this.markerDeleteMode = false;
         
         this.initUI();
     }
@@ -14,6 +16,7 @@ export class MarkerUI {
         this.createMainPanels();
         this.bindUIEvents();
         this.updateMarkerTable();
+        this.updateMarkerInspector();
     }
 
     escapeHtml(v) {
@@ -28,14 +31,6 @@ export class MarkerUI {
     setStatus(text) {
         const d = document.getElementById('info');
         if (d) d.textContent = text;
-    }
-
-    updateActiveGroupStatus() {
-        const el = document.getElementById('active-marker-group-info');
-        if (!el) return;
-        el.textContent = this.activeMarkerGroup
-            ? `Активная группа для маркеров: ${this.activeMarkerGroup}`
-            : 'Активная группа для маркеров: не выбрана';
     }
 
     ensureMarkerPopup() {
@@ -67,13 +62,22 @@ export class MarkerUI {
     showMarkerPopup(marker) {
         if (!marker?.sprite) return;
         const popup = this.ensureMarkerPopup();
+        
+        const positionText = [marker.worldPosition?.x, marker.worldPosition?.y, marker.worldPosition?.z]
+            .map((v) => Number(v || 0).toFixed(2)).join(', ');
 
         popup.innerHTML = `
-            <div style="font-weight:700; margin-bottom:6px; color:#9dc3ff;">
-                ${this.escapeHtml(marker.label || marker.id)}
+            <div style="font-weight:700; margin-bottom:4px; color:#9dc3ff; font-size:18px;">
+                ${this.escapeHtml(marker.label || marker.name || marker.id)}
             </div>
-            <div style="font-size:12px; opacity:0.8; margin-bottom:6px;">
-                ${this.escapeHtml(marker.groupName || 'без группы')}
+            <div style="font-size:13px; opacity:0.92; margin-bottom:2px;">
+                ${this.escapeHtml(marker.elementName || marker.elementId || 'world')}
+            </div>
+            <div style="font-size:12px; opacity:0.82; margin-bottom:2px;">
+                ${this.escapeHtml(positionText)}
+            </div>
+            <div style="font-size:12px; opacity:0.82; margin-bottom:10px;">
+                ${this.escapeHtml(marker.groupName || 'без анатомической группы')}
             </div>
             <div style="font-size:13px; line-height:1.45; white-space:pre-wrap;">
                 ${this.escapeHtml(marker.comment || 'Комментарий не указан')}
@@ -100,15 +104,24 @@ export class MarkerUI {
         }
     }
 
-    getMarkerStyleFromUI() {
-        return {
-            label: document.getElementById('marker-label')?.value?.trim() || '',
-            comment: document.getElementById('marker-comment')?.value?.trim() || '',
-            color: document.getElementById('marker-color')?.value || '#7eb6ff',
-            scale: Number(document.getElementById('marker-scale')?.value || 0.25),
-            opacity: Number(document.getElementById('marker-opacity')?.value || 1),
-            alwaysVisible: true
-        };
+    getSelectedMarker() {
+        return this.markerManager.markers.find((m) => m.selected) || null;
+    }
+
+    selectMarker(markerId) {
+        this.markerManager.markers.forEach((m) => {
+            m.selected = m.id === markerId;
+        });
+        this.updateMarkerInspector();
+        this.updateMarkerTable();
+    }
+
+    clearMarkerSelection() {
+        this.markerManager.markers.forEach((m) => {
+            m.selected = false;
+        });
+        this.updateMarkerInspector();
+        this.updateMarkerTable();
     }
 
     createMainPanels() {
@@ -122,76 +135,101 @@ export class MarkerUI {
                 <h3>Группы</h3>
                 <div id="group-controls"></div>
             </div>
+            
             <div id="tools-panel" class="panel panel-left">
-                <h3>Маркеры и материалы</h3>
-                <div class="field-row" style="display: flex; align-items: center;">
-                    <input type="checkbox" id="click-marker-mode" style="margin: 0; width: 16px; height: 16px;">
-                    <label for="click-marker-mode" style="margin-left: 8px; margin-bottom: 0; cursor: pointer;">Ставить маркер кликом</label>
+                <div class="marker-shell">
+                    <h3>Маркеры</h3>
                 </div>
-                <div class="field-row">
-                    <label>Подпись</label>
-                    <input id="marker-label" placeholder="Например: Точка боли">
-                </div>
-                <div class="field-row">
-                    <label>Комментарий</label>
-                    <textarea id="marker-comment" placeholder="Комментарий к маркеру" rows="4"></textarea>
-                </div>
-                <div class="field-row field-grid3">
-                    <div><label>Цвет</label><input type="color" id="marker-color" value="#7eb6ff"></div>
-                    <div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                            <label>Размер</label>
+                
+                <div id="marker-panel-body">
+                    <div class="section-card">
+                        <div class="action-row">
+                            <div class="action-label">Добавить маркер</div>
+                            <button id="toggle-add-marker" class="mini-btn">+</button>
                         </div>
-                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
-                            <input type="number" id="marker-scale" value="0.5" min="0.1" max="3" step="0.05" style="width: 100%;">
-                        </div>
-                        <div style="padding: 0 4px;">
-                            <input type="range" id="marker-scale-slider" value="0.5" min="0.1" max="3" step="0.05" style="width: 100%;">
+                        <div class="action-row">
+                            <div class="action-label">Удаление маркера</div>
+                            <button id="delete-selected-marker" class="mini-btn">−</button>
                         </div>
                     </div>
-                    <div><label>Прозр.</label><input type="number" id="marker-opacity" value="1" min="0.1" max="1" step="0.1"></div>
-                </div>
-                <div class="field-row">
-                    <label>Координаты X Y Z</label>
-                    <input id="marker-coords" placeholder="0 1.2 0.5">
-                </div>
-                <div class="field-row button-row">
-                    <button id="add-coords-marker">Добавить по координатам</button>
-                    <button id="clear-markers">Очистить</button>
-                </div>
-                <div class="field-row button-row">
-                    <button id="save-markers-json">Скачать JSON</button>
-                    <button id="save-markers-csv">Скачать CSV</button>
-                    <button id="load-markers-btn">Загрузить</button>
-                    <input type="file" id="load-markers-file" accept=".json,.csv" hidden>
-                </div>
-                <div class="field-row">
-                    <label>Выбранный элемент / ID</label>
-                    <input id="selected-element" placeholder="Кликните по модели" readonly>
-                </div>
-                <div class="field-row field-grid3">
-                    <div><label>Материал группы</label><select id="group-material-target"></select></div>
-                    <div><label>Тип</label><select id="material-preset">
-                        <option value="standard">Standard</option>
-                        <option value="glass">Glass</option>
-                        <option value="xray">XRay</option>
-                        <option value="emissive">Emissive</option>
-                        <option value="matte">Matte</option>
-                    </select></div>
-                    <div><label>Цвет</label><input type="color" id="material-color" value="#ff7a59"></div>
-                </div>
-                <div class="field-row button-row">
-                    <button id="apply-element-material">Материал элементу</button>
-                    <button id="apply-group-material">Материал группе</button>
-                    <button id="reset-materials">Сбросить материалы</button>
-                </div>
-                <div class="field-row">
-                    <label>Список маркеров</label>
-                    <div id="marker-table" class="marker-table"></div>
-                </div>
-                <div class="field-row button-row" style="margin-top: 10px;">
-                    <button id="show-all-markers">Показать все</button>
-                    <button id="hide-all-markers">Скрыть все</button>
+
+                    <div class="section-card">
+                        <div class="section-title">Данные маркера</div>
+                        <div class="marker-data-grid">
+                            <div class="data-line">
+                                <div>Крепится к:</div>
+                                <div id="selected-element-name">—</div>
+                            </div>
+                            <div class="data-line">
+                                <div>Размер:</div>
+                                <div class="slider-row">
+                                    <input type="range" id="selected-marker-scale-slider" min="0.01" max="1" step="0.01" value="0.5">
+                                    <input type="number" id="selected-marker-scale" min="0.01" max="1" step="0.01" value="0.5">
+                                </div>
+                            </div>
+                            <div class="data-line">
+                                <div>Цвет:</div>
+                                <div><input type="color" id="selected-marker-color" value="#7eb6ff"></div>
+                            </div>
+                            <div class="data-line">
+                                <div>Отображение:</div>
+                                <div>
+                                    <select id="selected-marker-shape">
+                                        <option value="sphere">сфера</option>
+                                        <option value="cube">куб</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="field-row" style="margin-top:6px;">
+                                <label>Комментарий</label>
+                                <textarea id="marker-comment" placeholder="Комментарий к маркеру"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <div class="section-title">Загрузка</div>
+                        <div class="inline-row">
+                            <select id="marker-group-select"></select>
+                            <button id="load-marker-group-apply" class="mini-btn primary">↑</button>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <div class="section-title">Сохранение</div>
+                        <div class="inline-row">
+                            <input id="marker-group-name" placeholder="my_group">
+                            <button id="save-marker-group-name" class="mini-btn primary">↓</button>
+                        </div>
+                        <div class="button-row" style="margin-top:8px;">
+                            <button id="save-markers-json">Скачать JSON</button>
+                            <button id="load-markers-btn">Загрузить JSON</button>
+                            <input type="file" id="load-markers-file" accept=".json" hidden>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <div class="section-title">Все группы</div>
+                        <div class="field-row">
+                            <input id="marker-group-search" placeholder="Поиск:">
+                        </div>
+                        <div id="stored-marker-groups-list"></div>
+                    </div>
+
+                    <div class="section-card">
+                        <div class="section-title">Список маркеров</div>
+                        <div id="marker-table" class="marker-table"></div>
+                    </div>
+
+                    <div class="toggle-hidden">
+                        <input type="checkbox" id="click-marker-mode">
+                        <input type="color" id="marker-color" value="#7eb6ff">
+                        <input type="number" id="marker-scale" value="0.5" min="0.1" max="3" step="0.05">
+                        <input type="number" id="marker-opacity" value="1" min="0.1" max="1" step="0.05">
+                        <input id="marker-label" placeholder="marker1">
+                        <input id="marker-coords" placeholder="0 1.2 0.5">
+                        <div id="active-marker-group-info"></div>
+                    </div>
                 </div>
             </div>
         `;
@@ -203,10 +241,6 @@ export class MarkerUI {
         if (!controlsContainer || !this.atlas) return;
         controlsContainer.innerHTML = '';
 
-        // Получаем группы из CSV менеджера
-        const groups = this.atlas.csvManager.getAllGroups();
-        const groupNames = groups.map(g => g.rawName);
-
         const buttonDiv = document.createElement('div');
         buttonDiv.className = 'button-row';
 
@@ -214,12 +248,7 @@ export class MarkerUI {
         showAllBtn.textContent = 'Show all';
         showAllBtn.onclick = () => {
             this.atlas.showAll();
-            controlsContainer.querySelectorAll('input[type="checkbox"][data-group]').forEach((b) => {
-                b.checked = true;
-            });
-            groupNames.forEach((groupName) => {
-                this.groupVisibility[groupName] = true;
-            });
+            controlsContainer.querySelectorAll('input[type="checkbox"][data-group]').forEach((b) => { b.checked = true; });
             this.markerManager?.refreshVisibility();
         };
 
@@ -227,15 +256,8 @@ export class MarkerUI {
         hideAllBtn.textContent = 'Hide all';
         hideAllBtn.onclick = () => {
             this.atlas.hideAll();
-            controlsContainer.querySelectorAll('input[type="checkbox"][data-group]').forEach((b) => {
-                b.checked = false;
-            });
-            groupNames.forEach((groupName) => {
-                this.groupVisibility[groupName] = false;
-            });
-            this.activeMarkerGroup = '';
+            controlsContainer.querySelectorAll('input[type="checkbox"][data-group]').forEach((b) => { b.checked = false; });
             this.markerManager?.refreshVisibility();
-            this.updateActiveGroupStatus();
             this.hideMarkerPopup();
         };
 
@@ -243,10 +265,10 @@ export class MarkerUI {
         buttonDiv.appendChild(hideAllBtn);
         controlsContainer.appendChild(buttonDiv);
 
-        groupNames.forEach((groupName) => {
-            if (!(groupName in this.groupVisibility)) {
-                this.groupVisibility[groupName] = false;
-            }
+        const groups = this.atlas.csvManager.getAllGroups().map(g => g.rawName);
+        
+        groups.forEach((groupName) => {
+            if (!(groupName in this.groupVisibility)) this.groupVisibility[groupName] = false;
 
             const div = document.createElement('div');
             div.className = 'group-row';
@@ -256,24 +278,13 @@ export class MarkerUI {
             checkbox.checked = false;
             checkbox.dataset.group = groupName;
             checkbox.id = `group-${groupName}`;
-
+            
             checkbox.addEventListener('change', (e) => {
                 const isVisible = Boolean(e.target.checked);
                 this.groupVisibility[groupName] = isVisible;
-
-                if (isVisible) {
-                    this.atlas.showGroup(groupName);
-                    this.activeMarkerGroup = groupName;
-                } else {
-                    this.atlas.hideGroup(groupName);
-                    if (this.activeMarkerGroup === groupName) {
-                        const stillVisible = groupNames.filter((g) => this.groupVisibility[g]);
-                        this.activeMarkerGroup = stillVisible.length ? stillVisible[stillVisible.length - 1] : '';
-                    }
-                }
-
+                if (isVisible) this.atlas.showGroup(groupName);
+                else this.atlas.hideGroup(groupName);
                 this.markerManager?.refreshVisibility();
-                this.updateActiveGroupStatus();
             });
 
             const label = document.createElement('label');
@@ -284,196 +295,316 @@ export class MarkerUI {
             div.appendChild(label);
             controlsContainer.appendChild(div);
         });
+    }
 
-        const activeInfo = document.createElement('div');
-        activeInfo.id = 'active-marker-group-info';
-        activeInfo.className = 'small-note';
-        activeInfo.style.marginTop = '10px';
-        controlsContainer.appendChild(activeInfo);
+    renderMarkerGroupControls() {
+        if (!this.markerManager) return;
+        
+        const select = document.getElementById('marker-group-select');
+        const listWrap = document.getElementById('stored-marker-groups-list');
+        const searchInput = document.getElementById('marker-group-search');
+        const groups = this.markerManager.getMarkerGroups();
+        
+        if (!groups.includes(this.activeMarkerGroup)) this.activeMarkerGroup = groups[0] || 'group_1';
 
-        this.updateActiveGroupStatus();
-
-        const select = document.getElementById('group-material-target');
         if (select) {
-            select.innerHTML = groupNames.map((g) => `<option value="${this.escapeHtml(g)}">${this.escapeHtml(g)}</option>`).join('');
+            select.innerHTML = groups.map((groupName) => 
+                `<option value="${this.escapeHtml(groupName)}" ${groupName === this.activeMarkerGroup ? 'selected' : ''}>
+                    ${this.escapeHtml(groupName)}
+                </option>`
+            ).join('');
+        }
+
+        if (listWrap) {
+            const query = String(searchInput?.value || '').trim().toLowerCase();
+            const filtered = groups.filter((groupName) => groupName.toLowerCase().includes(query));
+            
+            listWrap.innerHTML = filtered.map((groupName) => {
+                const count = this.markerManager.markers.filter((m) => m.markerGroup === groupName).length;
+                const visible = this.markerManager.markerGroupVisibility[groupName] !== false;
+                const visibilityIcon = visible ? '👁️' : '👁️‍🗨️';
+                const visibilityTitle = visible ? 'Скрыть группу' : 'Показать группу';
+                
+                return `
+                    <div class="group-store-row" data-group-row="${this.escapeHtml(groupName)}">
+                        <div class="subtle">${this.escapeHtml(groupName)} <span class="subtle">(${count})</span></div>
+                        <div style="display:flex; gap:4px;">
+                            <button class="mini-btn visibility-group-btn" 
+                                    data-group="${this.escapeHtml(groupName)}" 
+                                    data-visible="${visible}"
+                                    title="${visibilityTitle}">
+                                ${visibilityIcon}
+                            </button>
+                            <button class="mini-btn primary use-group-btn" 
+                                    data-group="${this.escapeHtml(groupName)}"
+                                    title="Сделать активной">
+                                ↑
+                            </button>
+                            <button class="mini-btn danger delete-group-btn" 
+                                    data-group="${this.escapeHtml(groupName)}"
+                                    title="Удалить группу">
+                                🗑
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('') || '<div class="empty-note">Группы не найдены</div>';
+
+            listWrap.querySelectorAll('.visibility-group-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const groupName = btn.dataset.group;
+                    const currentVisible = btn.dataset.visible === 'true';
+                    const newVisible = !currentVisible;
+                    
+                    this.markerManager.setMarkerGroupVisibility(groupName, newVisible);
+                    
+                    btn.dataset.visible = newVisible;
+                    btn.innerHTML = newVisible ? '👁️' : '👁️‍🗨️';
+                    btn.title = newVisible ? 'Скрыть группу' : 'Показать группу';
+                    
+                    this.updateMarkerTable();
+                    this.setStatus(`Группа «${groupName}» ${newVisible ? 'показана' : 'скрыта'}`);
+                });
+            });
+
+            listWrap.querySelectorAll('.use-group-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const groupName = btn.dataset.group;
+                    this.activeMarkerGroup = groupName;
+                    this.markerManager.setMarkerGroupVisibility(groupName, true);
+                    this.renderMarkerGroupControls();
+                    this.setStatus(`Активна группа маркеров: ${groupName}`);
+                });
+            });
+
+            listWrap.querySelectorAll('.delete-group-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const groupName = btn.dataset.group;
+                    if (!confirm(`Удалить группу «${groupName}» и все её маркеры?`)) return;
+                    this.markerManager.deleteMarkerGroup(groupName);
+                    if (this.activeMarkerGroup === groupName) {
+                        this.activeMarkerGroup = this.markerManager.getMarkerGroups()[0] || 'group_1';
+                    }
+                    this.renderMarkerGroupControls();
+                    this.updateMarkerTable();
+                    this.updateMarkerInspector();
+                    this.setStatus(`Удалена группа ${groupName}`);
+                });
+            });
         }
     }
 
-    parseVec3Input(value) {
-        const nums = String(value || '')
-            .split(/[;,\s]+/)
-            .map((v) => Number(v))
-            .filter((v) => Number.isFinite(v));
-        if (nums.length !== 3) return null;
-        return { x: nums[0], y: nums[1], z: nums[2] };
+    getMarkerStyleFromUI() {
+        return {
+            label: document.getElementById('marker-label')?.value?.trim() || '',
+            comment: document.getElementById('marker-comment')?.value?.trim() || '',
+            color: document.getElementById('marker-color')?.value || '#7eb6ff',
+            scale: Number(document.getElementById('marker-scale')?.value || 0.25),
+            opacity: Number(document.getElementById('marker-opacity')?.value || 1),
+            alwaysVisible: true,
+            markerGroup: this.activeMarkerGroup,
+            displayShape: document.getElementById('selected-marker-shape')?.value || 'sphere',
+            model: document.getElementById('selected-marker-shape')?.value || 'sphere'
+        };
+    }
+
+    updateMarkerInspector() {
+        const marker = this.getSelectedMarker();
+        const elementName = document.getElementById('selected-element-name');
+        const colorInput = document.getElementById('selected-marker-color');
+        const sizeInput = document.getElementById('selected-marker-scale');
+        const sizeSlider = document.getElementById('selected-marker-scale-slider');
+        const comment = document.getElementById('marker-comment');
+        const label = document.getElementById('marker-label');
+        const shapeSelect = document.getElementById('selected-marker-shape');
+
+        if (!marker) {
+            if (elementName) elementName.textContent = '—';
+            if (colorInput) colorInput.value = '#7eb6ff';
+            if (sizeInput) sizeInput.value = '0.50';
+            if (sizeSlider) sizeSlider.value = '0.5';
+            if (comment) comment.value = '';
+            if (label) label.value = '';
+            if (shapeSelect) shapeSelect.value = 'sphere';
+            return;
+        }
+
+        if (elementName) elementName.textContent = marker.elementName || marker.elementId || 'world';
+        if (colorInput) colorInput.value = marker.color || '#7eb6ff';
+        if (sizeInput) sizeInput.value = Number(marker.scale || 0.5).toFixed(2);
+        if (sizeSlider) sizeSlider.value = Number(marker.scale || 0.5);
+        if (comment) comment.value = marker.comment || '';
+        if (label) label.value = marker.label || marker.name || '';
+        if (shapeSelect) shapeSelect.value = marker.displayShape || 'sphere';
     }
 
     updateMarkerTable() {
         const wrap = document.getElementById('marker-table');
         if (!wrap || !this.markerManager) return;
-        const markers = this.markerManager.toJSON();
 
+        this.renderMarkerGroupControls();
+        const markers = this.markerManager.markers;
+        
         if (!markers.length) {
             wrap.innerHTML = '<div class="empty-note">Маркеров пока нет</div>';
             return;
         }
 
-        wrap.innerHTML = markers.map((m) => {
-            const fullMarker = this.markerManager.markers.find(mk => mk.id === m.id);
-            const isVisible = fullMarker?.visible !== false;
-
-            return `
-            <div class="marker-row" data-marker-id="${this.escapeHtml(m.id)}">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 18px; cursor: pointer;" 
-                          class="visibility-toggle" 
-                          data-marker-id="${this.escapeHtml(m.id)}"
-                          title="${isVisible ? 'Скрыть маркер' : 'Показать маркер'}">
-                        ${isVisible ? '👁️' : '👁️‍🗨️'}
-                    </span>
-                    <div style="flex: 1;">
-                        <div><strong>${this.escapeHtml(m.label || m.id)}</strong></div>
-                        <div class="small-note">${this.escapeHtml(m.elementName || m.elementId || 'world')}</div>
-                    </div>
+        wrap.innerHTML = markers.map((m) => `
+            <div class="marker-row ${m.selected ? 'selected' : ''}" data-marker-id="${this.escapeHtml(m.id)}">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <strong>${this.escapeHtml(m.label || m.name || m.id)}</strong>
+                    <span class="subtle">${this.escapeHtml(m.markerGroup)}</span>
                 </div>
+                <div class="small-note">${this.escapeHtml(m.elementName || m.elementId || 'world')}</div>
                 <div class="small-note">${[m.worldPosition?.x, m.worldPosition?.y, m.worldPosition?.z].map((v) => Number(v || 0).toFixed(2)).join(', ')}</div>
-                <div class="small-note">${this.escapeHtml(m.groupName || 'no group')}</div>
-                <div class="small-note">${this.escapeHtml(m.comment || '')}</div>
                 <div class="button-row compact-row">
                     <button data-action="focus">Фокус</button>
-                    <button data-action="show">Комментарий</button>
+                    <button data-action="toggle-visibility">${m.visible ? 'Скрыть' : 'Показать'}</button>
+                    <button data-action="show">Коммент</button>
                     <button data-action="delete">Удалить</button>
                 </div>
             </div>
-        `}).join('');
+        `).join('');
 
-        wrap.querySelectorAll('.visibility-toggle').forEach((toggle) => {
-            toggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const markerId = toggle.dataset.markerId;
-                const newVisibility = this.markerManager.toggleMarkerVisibility(markerId);
-                this.updateMarkerTable();
-                this.setStatus(`Маркер ${newVisibility ? 'показан' : 'скрыт'}`);
+        wrap.querySelectorAll('.marker-row').forEach((row) => {
+            row.addEventListener('click', () => {
+                this.selectMarker(row.dataset.markerId);
             });
         });
 
         wrap.querySelectorAll('button[data-action]').forEach((btn) => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const row = btn.closest('[data-marker-id]');
                 const id = row?.dataset.markerId;
                 if (!id) return;
-
-                if (btn.dataset.action === 'delete') {
-                    this.markerManager.removeMarker(id);
-                    this.updateMarkerTable();
-                    return;
-                }
-
+                
                 const marker = this.markerManager.markers.find((m) => m.id === id);
                 if (!marker) return;
 
-                if (btn.dataset.action === 'focus') {
-                    if (marker.sprite) {
-                        this.atlas.controls.target.copy(marker.sprite.position);
-                    }
+                if (btn.dataset.action === 'delete') {
+                    if (!confirm('Удалить этот маркер?')) return;
+                    this.markerManager.removeMarker(id);
+                    this.updateMarkerTable();
+                    this.updateMarkerInspector();
                     return;
                 }
-
+                if (btn.dataset.action === 'focus') {
+                    if (marker.sprite) this.atlas.controls.target.copy(marker.sprite.position);
+                    return;
+                }
                 if (btn.dataset.action === 'show') {
                     this.showMarkerPopup(marker);
+                }
+                if (btn.dataset.action === 'toggle-visibility') {
+                    this.markerManager.toggleMarkerVisibility(id);
+                    this.updateMarkerTable();
+                    return;
                 }
             });
         });
     }
 
     bindUIEvents() {
-        const scaleSlider = document.getElementById('marker-scale-slider');
-        const scaleInput = document.getElementById('marker-scale');
+        document.getElementById('toggle-add-marker')?.addEventListener('click', () => {
+            const checkbox = document.getElementById('click-marker-mode');
+            checkbox.checked = !checkbox.checked;
+            this.atlas.renderer.domElement.style.cursor = checkbox.checked ? 'crosshair' : 'default';
+            this.setStatus(checkbox.checked ? 'Режим добавления маркеров включён' : 'Режим добавления маркеров выключен');
+        });
 
-        if (scaleSlider && scaleInput) {
-            scaleSlider.addEventListener('input', (e) => {
-                const value = parseFloat(e.target.value);
-                scaleInput.value = value.toFixed(2);
-            });
+        document.getElementById('delete-selected-marker')?.addEventListener('click', () => {
+            this.markerDeleteMode = !this.markerDeleteMode;
+            const btn = document.getElementById('delete-selected-marker');
+            if (btn) btn.classList.toggle('active-mode', this.markerDeleteMode);
+            this.atlas.renderer.domElement.style.cursor = this.markerDeleteMode ? 'not-allowed' : 
+                (document.getElementById('click-marker-mode')?.checked ? 'crosshair' : 'default');
+            this.setStatus(this.markerDeleteMode ? 'Режим удаления маркеров включён. Кликните по маркеру для удаления.' : 'Режим удаления маркеров выключен');
+        });
 
-            scaleInput.addEventListener('input', (e) => {
-                let value = parseFloat(e.target.value);
-                if (isNaN(value)) value = 0.5;
-                if (value < 0.1) value = 0.1;
-                if (value > 3) value = 3;
-                scaleInput.value = value.toFixed(2);
-                scaleSlider.value = value;
-            });
-        }
+        const selectedColor = document.getElementById('selected-marker-color');
+        selectedColor?.addEventListener('input', (e) => {
+            const marker = this.getSelectedMarker();
+            if (!marker) return;
+            this.markerManager.updateMarkerProperties(marker.id, { color: e.target.value });
+            document.getElementById('marker-color').value = e.target.value;
+        });
 
-        document.getElementById('add-coords-marker')?.addEventListener('click', () => {
-            const coords = document.getElementById('marker-coords')?.value;
-            const vec = this.parseVec3Input(coords);
-            if (!vec) {
-                this.setStatus('Нужны 3 координаты: X Y Z');
-                return;
-            }
-            const marker = this.markerManager.addMarkerAtWorldPosition(vec, {
-                ...this.getMarkerStyleFromUI(),
-                groupName: this.activeMarkerGroup || ''
-            });
-            this.setStatus(`Маркер ${marker.id} добавлен по координатам`);
+        const selectedSize = document.getElementById('selected-marker-scale');
+        const selectedSizeSlider = document.getElementById('selected-marker-scale-slider');
+        
+        selectedSizeSlider?.addEventListener('input', (e) => {
+            const marker = this.getSelectedMarker();
+            if (!marker) return;
+            const scale = Number(e.target.value);
+            if (selectedSize) selectedSize.value = scale.toFixed(2);
+            this.markerManager.updateMarkerProperties(marker.id, { scale });
+            document.getElementById('marker-scale').value = scale;
+        });
+        
+        selectedSize?.addEventListener('input', (e) => {
+            const marker = this.getSelectedMarker();
+            if (!marker) return;
+            let scale = Number(e.target.value);
+            if (!Number.isFinite(scale)) scale = 0.5;
+            scale = Math.min(3, Math.max(0.1, scale));
+            e.target.value = scale.toFixed(2);
+            if (selectedSizeSlider) selectedSizeSlider.value = scale;
+            this.markerManager.updateMarkerProperties(marker.id, { scale });
+            document.getElementById('marker-scale').value = scale;
+        });
+
+        document.getElementById('marker-comment')?.addEventListener('input', (e) => {
+            const marker = this.getSelectedMarker();
+            if (!marker) return;
+            this.markerManager.updateMarkerProperties(marker.id, { comment: e.target.value });
+        });
+
+        document.getElementById('selected-marker-shape')?.addEventListener('change', (e) => {
+            const marker = this.getSelectedMarker();
+            if (!marker) return;
+            this.markerManager.updateMarkerProperties(marker.id, { displayShape: e.target.value, model: e.target.value });
+        });
+
+        document.getElementById('marker-label')?.addEventListener('input', (e) => {
+            const marker = this.getSelectedMarker();
+            if (!marker) return;
+            this.markerManager.updateMarkerProperties(marker.id, { label: e.target.value });
             this.updateMarkerTable();
         });
 
-        const clickModeCheckbox = document.getElementById('click-marker-mode');
-        if (clickModeCheckbox) {
-            clickModeCheckbox.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    this.atlas.renderer.domElement.style.cursor = 'crosshair';
-                    document.body.style.cursor = 'crosshair';
-                    this.setStatus('Режим добавления маркеров включен - кликните по модели');
-                } else {
-                    this.atlas.renderer.domElement.style.cursor = 'default';
-                    document.body.style.cursor = 'default';
-                    this.setStatus('Режим добавления маркеров выключен');
-                }
-            });
-        }
-
-        document.getElementById('show-all-markers')?.addEventListener('click', () => {
-            this.markerManager.markers.forEach(m => {
-                this.markerManager.setMarkerVisibility(m.id, true);
-            });
+        document.getElementById('save-marker-group-name')?.addEventListener('click', () => {
+            const input = document.getElementById('marker-group-name');
+            const nextName = input?.value?.trim().replace(/\s+/g, '_') || '';
+            if (!nextName) return;
+            if (!confirm(`Добавить новую группу «${nextName}»?`)) return;
+            this.markerManager.createMarkerGroup(nextName);
+            this.activeMarkerGroup = nextName;
+            if (input) input.value = '';
+            this.renderMarkerGroupControls();
             this.updateMarkerTable();
-            this.setStatus('Все маркеры показаны');
+            this.setStatus(`Добавлена новая группа ${nextName}`);
         });
 
-        document.getElementById('hide-all-markers')?.addEventListener('click', () => {
-            this.markerManager.markers.forEach(m => {
-                this.markerManager.setMarkerVisibility(m.id, false);
-            });
-            this.updateMarkerTable();
-            this.setStatus('Все маркеры скрыты');
+        document.getElementById('load-marker-group-apply')?.addEventListener('click', () => {
+            const select = document.getElementById('marker-group-select');
+            const groupName = select?.value || this.activeMarkerGroup;
+            if (!confirm(`Сделать группу «${groupName}» активной?`)) return;
+            this.activeMarkerGroup = groupName;
+            this.markerManager.setMarkerGroupVisibility(groupName, true);
+            this.renderMarkerGroupControls();
+            this.setStatus(`Активна группа ${groupName}`);
         });
 
-        document.getElementById('clear-markers')?.addEventListener('click', () => {
-            this.markerManager.clear();
-            this.updateMarkerTable();
-            this.setStatus('Маркеры очищены.');
-        });
+        document.getElementById('marker-group-search')?.addEventListener('input', () => this.renderMarkerGroupControls());
 
         document.getElementById('save-markers-json')?.addEventListener('click', () => {
-            const blob = new Blob([JSON.stringify({ markers: this.markerManager.toJSON() }, null, 2)], { type: 'application/json' });
+            const blob = new Blob([JSON.stringify(this.markerManager.exportGroupedJSON(), null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'markers.json';
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        });
-
-        document.getElementById('save-markers-csv')?.addEventListener('click', () => {
-            const blob = new Blob([this.markerManager.toCSV()], { type: 'text/csv;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'markers.csv';
             a.click();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         });
@@ -485,54 +616,50 @@ export class MarkerUI {
         document.getElementById('load-markers-file')?.addEventListener('change', async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
-
             const text = await file.text();
-            const fileName = file.name.toLowerCase();
-
             try {
-                if (fileName.endsWith('.json')) {
-                    const json = JSON.parse(text);
-                    this.markerManager.loadFromJSON(json);
-                    this.setStatus(`✅ Загружено маркеров из JSON: ${this.markerManager.markers.length}`);
-                }
-                else if (fileName.endsWith('.csv')) {
-                    // Здесь нужна функция parseCSV, которую можно добавить
-                    this.setStatus('CSV загрузка пока в разработке');
-                }
-                else {
-                    this.setStatus('❌ Поддерживаются только .json и .csv файлы');
-                }
-
+                this.markerManager.loadFromJSON(JSON.parse(text));
+                this.renderMarkerGroupControls();
                 this.updateMarkerTable();
+                this.updateMarkerInspector();
+                this.setStatus(`Загружено маркеров: ${this.markerManager.markers.length}`);
             } catch (err) {
-                console.error('Ошибка загрузки:', err);
-                this.setStatus(`❌ Ошибка загрузки: ${err.message}`);
+                console.error(err);
+                this.setStatus(`Ошибка загрузки: ${err.message}`);
             }
-
             e.target.value = '';
         });
 
-        document.getElementById('apply-element-material')?.addEventListener('click', () => {
-            if (!this.selectedElementId) {
-                this.setStatus('Сначала выберите элемент кликом по модели.');
+        document.getElementById('selected-element-name')?.addEventListener('dblclick', () => {
+            const coords = prompt('Введите координаты X Y Z для нового маркера');
+            if (!coords) return;
+            const marker = this.markerManager.addMarkerFromCoordinates(coords, this.getMarkerStyleFromUI());
+            if (!marker) {
+                this.setStatus('Нужны 3 координаты: X Y Z');
                 return;
             }
-            const color = document.getElementById('material-color')?.value;
-            this.atlas.applyMaterialToGroup(this.selectedElementId, color);
-            this.setStatus(`Материал применён к элементу: ${this.selectedElementId}`);
+            this.selectMarker(marker.id);
+            this.setStatus(`Маркер ${marker.id} добавлен в группу ${marker.markerGroup}`);
         });
 
-        document.getElementById('apply-group-material')?.addEventListener('click', () => {
-            const group = document.getElementById('group-material-target')?.value;
-            if (!group) return;
-            const color = document.getElementById('material-color')?.value;
-            this.atlas.applyMaterialToGroup(group, color);
-            this.setStatus(`Материал применён к группе: ${group}`);
+        document.getElementById('click-marker-mode')?.addEventListener('change', (e) => {
+            if (this.markerDeleteMode) {
+                this.atlas.renderer.domElement.style.cursor = 'not-allowed';
+                return;
+            }
+            this.atlas.renderer.domElement.style.cursor = e.target.checked ? 'crosshair' : 'default';
         });
 
-        document.getElementById('reset-materials')?.addEventListener('click', () => {
-            // Здесь нужен метод resetAllMaterials
-            this.setStatus('Сброс материалов пока не реализован');
+        document.getElementById('add-coords-marker')?.addEventListener('click', () => {
+            const coords = document.getElementById('marker-coords')?.value;
+            const marker = this.markerManager.addMarkerFromCoordinates(coords, this.getMarkerStyleFromUI());
+            if (!marker) {
+                this.setStatus('Нужны 3 координаты: X Y Z');
+                return;
+            }
+            this.selectMarker(marker.id);
+            this.updateMarkerTable();
+            this.setStatus(`Маркер добавлен по координатам в группу ${marker.markerGroup}`);
         });
     }
 }

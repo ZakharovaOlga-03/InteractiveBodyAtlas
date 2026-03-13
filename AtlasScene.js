@@ -641,4 +641,13 @@ initMarkerManager() {
     }
     return this.markerManager;
 }
+
+resetAllMaterials() {
+    if (!this.currentModel) return;
+    
+    // Возвращаем базовый материал
+    this.applyBaseMaterialToAllMeshes();
+    
+    console.log('All materials reset to base');
+}
 }
