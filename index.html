@@ -426,149 +426,54 @@
   <div id="canvas-container"></div>
 
   <script type="module">
-  import { AtlasScene } from './AtlasScene.js';
-  import { MarkerManager } from './MarkerManager.js';
-  import { MarkerUI } from './MarkerUI.js';
-  import * as THREE from 'three';
+    import { AtlasScene } from './AtlasScene.js';
+    import { MarkerManager } from './MarkerManager.js';
+    import { MarkerUI } from './MarkerUI.js';
 
-  const atlas = new AtlasScene('canvas-container', {
-    modelBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/models/',
-    csvBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/'
-  });
-
-  try {
-    await atlas.loadModel1('1-5.glb');
-    console.log('✅ Model 1 loaded');
-    
-    await atlas.loadModel2('6-9.glb');
-    console.log('✅ Model 2 loaded');
-    
-    await atlas.loadCsv('visible_groups.csv');
-    console.log('✅ CSV loaded');
-    
-    // Инициализируем менеджер маркеров
-    const markerManager = new MarkerManager({ 
-      scene: atlas.scene, 
-      atlas: atlas 
+    const atlas = new AtlasScene('canvas-container', {
+      modelBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/models/',
+      csvBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/'
     });
-    
-    atlas.markerManager = markerManager;
-    
-    // Инициализируем UI маркеров
-    const markerUI = new MarkerUI(atlas, markerManager);
-    
-    // Создаем панели
-    markerUI.createGroupControls();
-    
-    // 🔥 ВАЖНО: Фильтруем меши по видимости при рейкастинге
-    function getVisibleMeshes() {
-      return atlas.getMeshes().filter(mesh => mesh.visible);
-    }
-    
-    // Добавляем обработчик кликов для режима добавления/удаления маркеров
-    atlas.renderer.domElement.addEventListener('click', (event) => {
-      const raycaster = new THREE.Raycaster();
-      const rect = atlas.renderer.domElement.getBoundingClientRect();
-      const pointer = {
-        x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        y: -((event.clientY - rect.top) / rect.height) * 2 + 1
-      };
+
+    try {
+      await atlas.loadModel1('1-5.glb');
+      console.log('✅ Model 1 loaded');
       
-      raycaster.setFromCamera(pointer, atlas.camera);
+      await atlas.loadModel2('6-9.glb');
+      console.log('✅ Model 2 loaded');
       
-      // 1. Сначала проверяем маркеры (они всегда видимы, если группа видна)
-      if (markerManager.group) {
-        const visibleMarkers = markerManager.group.children.filter(child => child.visible);
-        const markerIntersections = raycaster.intersectObjects(visibleMarkers);
-        
-        if (markerIntersections.length > 0) {
-          const marker = markerManager.getMarkerBySprite(markerIntersections[0].object);
-          if (marker) {
-            if (markerUI.markerDeleteMode) {
-              if (confirm(`Удалить маркер «${marker.label || marker.name || marker.id}»?`)) {
-                markerManager.removeMarker(marker.id);
-                markerUI.markerDeleteMode = false;
-                const deleteBtn = document.getElementById('delete-selected-marker');
-                if (deleteBtn) deleteBtn.classList.remove('active-mode');
-                atlas.renderer.domElement.style.cursor = 
-                  document.getElementById('click-marker-mode')?.checked ? 'crosshair' : 'default';
-                markerUI.updateMarkerTable();
-                markerUI.updateMarkerInspector();
-                markerUI.setStatus('Маркер удалён');
-              }
-              return;
-            } else {
-              markerUI.selectMarker(marker.id);
-              markerUI.showMarkerPopup(marker);
-              markerUI.setStatus(`Открыт маркер: ${marker.label || marker.id}`);
-              return;
-            }
-          }
-        }
+      await atlas.loadCsv('visible_groups.csv');
+      console.log('✅ CSV loaded');
+      
+      // Инициализируем менеджер маркеров
+      const markerManager = new MarkerManager({ 
+        scene: atlas.scene, 
+        atlas: atlas 
+      });
+      
+      atlas.markerManager = markerManager;
+      
+      // Инициализируем UI маркеров - ВСЯ ЛОГИКА ВНУТРИ!
+      const markerUI = new MarkerUI(atlas, markerManager);
+      
+      // Создаем панели
+      markerUI.createGroupControls();
+      
+      // Показываем первую группу для примера
+      const groups = atlas.csvManager.getAllGroups();
+      if (groups.length > 0) {
+        atlas.showGroup(groups[0].rawName);
+        if (groups.length > 4) atlas.showGroup(groups[4].rawName);
       }
       
-      // 2. Если не маркер, проверяем ТОЛЬКО ВИДИМЫЕ меши модели
-      markerUI.hideMarkerPopup();
+      window.atlas = atlas;
+      window.markerManager = markerManager;
+      window.markerUI = markerUI;
       
-      const visibleMeshes = getVisibleMeshes();
-      const meshIntersections = raycaster.intersectObjects(visibleMeshes);
-      
-      if (meshIntersections.length > 0) {
-        const hit = meshIntersections[0];
-        
-        // Обновляем выбранный элемент в UI
-        const attach = document.getElementById('selected-element-name');
-        if (attach) attach.textContent = hit.object.name || hit.object.uuid || 'mesh';
-        
-        // Если включен режим добавления маркеров
-        if (document.getElementById('click-marker-mode')?.checked) {
-          const marker = markerManager.addMarkerFromIntersection(hit, {
-            label: document.getElementById('marker-label')?.value || '',
-            comment: document.getElementById('marker-comment')?.value || '',
-            color: document.getElementById('selected-marker-color')?.value || '#7eb6ff',
-            scale: Number(document.getElementById('selected-marker-scale')?.value || 0.5),
-            opacity: 1,
-            markerGroup: markerUI.activeMarkerGroup,
-            displayShape: document.getElementById('selected-marker-shape')?.value || 'sphere'
-          });
-          
-          if (marker) {
-            markerUI.selectMarker(marker.id);
-            markerUI.updateMarkerTable();
-            markerUI.setStatus(`✅ Маркер добавлен на ${hit.object.name || 'mesh'} в группу ${marker.markerGroup}`);
-          }
-        } else {
-          markerUI.setStatus(`Выбран элемент: ${hit.object.name || 'mesh'}`);
-        }
-      } else {
-        if (document.getElementById('click-marker-mode')?.checked) {
-          markerUI.setStatus('❌ Кликните на видимую часть модели');
-        }
-      }
-    });
-    
-    // Обработка сворачивания панели
-    document.getElementById('panel-toggle').addEventListener('click', () => {
-      document.body.classList.toggle('panel-collapsed');
-      const toggle = document.getElementById('panel-toggle');
-      toggle.textContent = document.body.classList.contains('panel-collapsed') ? '»' : '«';
-    });
-    
-    window.atlas = atlas;
-    window.markerManager = markerManager;
-    window.markerUI = markerUI;
-    
-    // Показываем первую группу для примера
-    const groups = atlas.csvManager.getAllGroups();
-    if (groups.length > 0) {
-      atlas.showGroup(groups[0].rawName);
-      if (groups.length > 4) atlas.showGroup(groups[4].rawName);
+    } catch (error) {
+      console.error('❌ Error loading assets:', error);
+      document.getElementById('info').textContent = 'Ошибка загрузки: ' + error.message;
     }
-    
-  } catch (error) {
-    console.error('❌ Error loading assets:', error);
-    document.getElementById('info').textContent = 'Ошибка загрузки: ' + error.message;
-  }
-</script>
+  </script>
 </body>
 </html>

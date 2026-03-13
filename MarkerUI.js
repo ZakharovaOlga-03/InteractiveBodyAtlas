@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 // MarkerUI.js — пользовательский интерфейс для маркеров
 export class MarkerUI {
     constructor(atlasScene, markerManager) {
@@ -9,7 +11,135 @@ export class MarkerUI {
         this.panelCollapsed = false;
         this.markerDeleteMode = false;
 
+        this.raycaster = new THREE.Raycaster();
+        this.pointer = new THREE.Vector2();
+
         this.initUI();
+        this.initEventListeners();
+    }
+
+    // 🔥 НОВЫЙ МЕТОД: инициализация всех обработчиков событий
+    initEventListeners() {
+        if (!this.atlas || !this.atlas.renderer) {
+            console.error('Atlas or renderer not available for event listeners');
+            return;
+        }
+
+        // Добавляем обработчик кликов на renderer
+        this.atlas.renderer.domElement.addEventListener('click', this.handleCanvasClick.bind(this));
+        
+        // Обработка сворачивания панели
+        const panelToggle = document.getElementById('panel-toggle');
+        if (panelToggle) {
+            panelToggle.addEventListener('click', this.togglePanel.bind(this));
+        }
+
+        console.log('✅ Event listeners initialized');
+    }
+
+    // 🔥 НОВЫЙ МЕТОД: обработка кликов по канвасу
+    handleCanvasClick(event) {
+        if (!this.markerManager) return;
+
+        if (!this.raycaster) {
+        console.error('Raycaster not initialized');
+        return;
+    }
+
+        const rect = this.atlas.renderer.domElement.getBoundingClientRect();
+        this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        this.raycaster.setFromCamera(this.pointer, this.atlas.camera);
+        
+        // 1. Сначала проверяем маркеры
+        if (this.markerManager.group) {
+            const visibleMarkers = this.markerManager.group.children.filter(child => child.visible);
+            const markerIntersections = this.raycaster.intersectObjects(visibleMarkers);
+            
+            if (markerIntersections.length > 0) {
+                const marker = this.markerManager.getMarkerBySprite(markerIntersections[0].object);
+                if (marker) {
+                    this.handleMarkerClick(marker);
+                    return;
+                }
+            }
+        }
+        
+        // 2. Если не маркер, проверяем видимые меши модели
+        this.hideMarkerPopup();
+        
+        const visibleMeshes = this.getVisibleMeshes();
+        const meshIntersections = this.raycaster.intersectObjects(visibleMeshes);
+        
+        if (meshIntersections.length > 0) {
+            this.handleMeshClick(meshIntersections[0]);
+        } else {
+            this.handleEmptyClick();
+        }
+    }
+
+    // 🔥 НОВЫЙ МЕТОД: получить видимые меши
+    getVisibleMeshes() {
+        return this.atlas.getMeshes().filter(mesh => mesh.visible);
+    }
+
+    // 🔥 НОВЫЙ МЕТОД: обработка клика по маркеру
+    handleMarkerClick(marker) {
+        if (this.markerDeleteMode) {
+            if (confirm(`Удалить маркер «${marker.label || marker.name || marker.id}»?`)) {
+                this.markerManager.removeMarker(marker.id);
+                this.markerDeleteMode = false;
+                const deleteBtn = document.getElementById('delete-selected-marker');
+                if (deleteBtn) deleteBtn.classList.remove('active-mode');
+                this.atlas.renderer.domElement.style.cursor = 
+                    document.getElementById('click-marker-mode')?.checked ? 'crosshair' : 'default';
+                this.updateMarkerTable();
+                this.updateMarkerInspector();
+                this.setStatus('Маркер удалён');
+            }
+            return;
+        }
+        
+        this.selectMarker(marker.id);
+        this.showMarkerPopup(marker);
+        this.setStatus(`Открыт маркер: ${marker.label || marker.id}`);
+    }
+
+    // 🔥 НОВЫЙ МЕТОД: обработка клика по мешу модели
+    handleMeshClick(hit) {
+        // Обновляем выбранный элемент в UI
+        const attach = document.getElementById('selected-element-name');
+        if (attach) attach.textContent = hit.object.name || hit.object.uuid || 'mesh';
+        
+        // Если включен режим добавления маркеров
+        if (document.getElementById('click-marker-mode')?.checked) {
+            const marker = this.markerManager.addMarkerFromIntersection(hit, this.getMarkerStyleFromUI());
+            
+            if (marker) {
+                this.selectMarker(marker.id);
+                this.updateMarkerTable();
+                this.setStatus(`✅ Маркер добавлен на ${hit.object.name || 'mesh'} в группу ${marker.markerGroup}`);
+            }
+        } else {
+            this.setStatus(`Выбран элемент: ${hit.object.name || 'mesh'}`);
+        }
+    }
+
+    // 🔥 НОВЫЙ МЕТОД: обработка клика по пустому месту
+    handleEmptyClick() {
+        if (document.getElementById('click-marker-mode')?.checked) {
+            this.setStatus('❌ Кликните на видимую часть модели');
+        }
+    }
+
+    // 🔥 НОВЫЙ МЕТОД: сворачивание/разворачивание панели
+    togglePanel() {
+        document.body.classList.toggle('panel-collapsed');
+        const toggle = document.getElementById('panel-toggle');
+        if (toggle) {
+            toggle.textContent = document.body.classList.contains('panel-collapsed') ? '»' : '«';
+        }
     }
 
     initUI() {
@@ -553,6 +683,9 @@ export class MarkerUI {
 
         const selectedSize = document.getElementById('selected-marker-scale');
         const selectedSizeSlider = document.getElementById('selected-marker-scale-slider');
+
+        const scaleSlider = document.getElementById('marker-scale-slider');
+        const scaleInput = document.getElementById('marker-scale');
 
         selectedSizeSlider?.addEventListener('input', (e) => {
             const marker = this.getSelectedMarker();
