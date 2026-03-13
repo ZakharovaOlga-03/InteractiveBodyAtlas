@@ -8,7 +8,7 @@ export class MarkerUI {
         this.groupVisibility = {};
         this.panelCollapsed = false;
         this.markerDeleteMode = false;
-        
+
         this.initUI();
     }
 
@@ -62,7 +62,7 @@ export class MarkerUI {
     showMarkerPopup(marker) {
         if (!marker?.sprite) return;
         const popup = this.ensureMarkerPopup();
-        
+
         const positionText = [marker.worldPosition?.x, marker.worldPosition?.y, marker.worldPosition?.z]
             .map((v) => Number(v || 0).toFixed(2)).join(', ');
 
@@ -151,6 +151,12 @@ export class MarkerUI {
                             <div class="action-label">Удаление маркера</div>
                             <button id="delete-selected-marker" class="mini-btn">−</button>
                         </div>
+                        <div class="data-line">
+                            <div>Поверх всего:</div>
+                            <div>
+                            <input type="checkbox" id="marker-always-visible" style="width: auto; margin: 0;">
+                        </div>
+                    </div>
                     </div>
 
                     <div class="section-card">
@@ -231,6 +237,17 @@ export class MarkerUI {
                         <div id="active-marker-group-info"></div>
                     </div>
                 </div>
+                <div class="section-card">
+        <div class="section-title">Режим отображения</div>
+        <div class="button-row">
+            <button id="set-all-markers-always">Все поверх</button>
+            <button id="set-all-markers-normal">Все в глубине</button>
+        </div>
+        <div class="button-row" style="margin-top: 8px;">
+            <button id="set-group-always">Группа поверх</button>
+            <button id="set-group-normal">Группа в глубине</button>
+        </div>
+    </div>
             </div>
         `;
         document.body.appendChild(ui);
@@ -266,7 +283,7 @@ export class MarkerUI {
         controlsContainer.appendChild(buttonDiv);
 
         const groups = this.atlas.csvManager.getAllGroups().map(g => g.rawName);
-        
+
         groups.forEach((groupName) => {
             if (!(groupName in this.groupVisibility)) this.groupVisibility[groupName] = false;
 
@@ -278,7 +295,7 @@ export class MarkerUI {
             checkbox.checked = false;
             checkbox.dataset.group = groupName;
             checkbox.id = `group-${groupName}`;
-            
+
             checkbox.addEventListener('change', (e) => {
                 const isVisible = Boolean(e.target.checked);
                 this.groupVisibility[groupName] = isVisible;
@@ -299,16 +316,16 @@ export class MarkerUI {
 
     renderMarkerGroupControls() {
         if (!this.markerManager) return;
-        
+
         const select = document.getElementById('marker-group-select');
         const listWrap = document.getElementById('stored-marker-groups-list');
         const searchInput = document.getElementById('marker-group-search');
         const groups = this.markerManager.getMarkerGroups();
-        
+
         if (!groups.includes(this.activeMarkerGroup)) this.activeMarkerGroup = groups[0] || 'group_1';
 
         if (select) {
-            select.innerHTML = groups.map((groupName) => 
+            select.innerHTML = groups.map((groupName) =>
                 `<option value="${this.escapeHtml(groupName)}" ${groupName === this.activeMarkerGroup ? 'selected' : ''}>
                     ${this.escapeHtml(groupName)}
                 </option>`
@@ -318,13 +335,13 @@ export class MarkerUI {
         if (listWrap) {
             const query = String(searchInput?.value || '').trim().toLowerCase();
             const filtered = groups.filter((groupName) => groupName.toLowerCase().includes(query));
-            
+
             listWrap.innerHTML = filtered.map((groupName) => {
                 const count = this.markerManager.markers.filter((m) => m.markerGroup === groupName).length;
                 const visible = this.markerManager.markerGroupVisibility[groupName] !== false;
                 const visibilityIcon = visible ? '👁️' : '👁️‍🗨️';
                 const visibilityTitle = visible ? 'Скрыть группу' : 'Показать группу';
-                
+
                 return `
                     <div class="group-store-row" data-group-row="${this.escapeHtml(groupName)}">
                         <div class="subtle">${this.escapeHtml(groupName)} <span class="subtle">(${count})</span></div>
@@ -355,13 +372,13 @@ export class MarkerUI {
                     const groupName = btn.dataset.group;
                     const currentVisible = btn.dataset.visible === 'true';
                     const newVisible = !currentVisible;
-                    
+
                     this.markerManager.setMarkerGroupVisibility(groupName, newVisible);
-                    
+
                     btn.dataset.visible = newVisible;
                     btn.innerHTML = newVisible ? '👁️' : '👁️‍🗨️';
                     btn.title = newVisible ? 'Скрыть группу' : 'Показать группу';
-                    
+
                     this.updateMarkerTable();
                     this.setStatus(`Группа «${groupName}» ${newVisible ? 'показана' : 'скрыта'}`);
                 });
@@ -417,25 +434,28 @@ export class MarkerUI {
         const comment = document.getElementById('marker-comment');
         const label = document.getElementById('marker-label');
         const shapeSelect = document.getElementById('selected-marker-shape');
+        const alwaysVisibleCheck = document.getElementById('marker-always-visible');
 
         if (!marker) {
             if (elementName) elementName.textContent = '—';
             if (colorInput) colorInput.value = '#7eb6ff';
-            if (sizeInput) sizeInput.value = '0.50';
-            if (sizeSlider) sizeSlider.value = '0.5';
+            if (sizeInput) sizeInput.value = '0.25';
+            if (sizeSlider) sizeSlider.value = '0.25';
             if (comment) comment.value = '';
             if (label) label.value = '';
             if (shapeSelect) shapeSelect.value = 'sphere';
+            if (alwaysVisibleCheck) alwaysVisibleCheck.checked = false;
             return;
         }
 
         if (elementName) elementName.textContent = marker.elementName || marker.elementId || 'world';
         if (colorInput) colorInput.value = marker.color || '#7eb6ff';
-        if (sizeInput) sizeInput.value = Number(marker.scale || 0.5).toFixed(2);
-        if (sizeSlider) sizeSlider.value = Number(marker.scale || 0.5);
+        if (sizeInput) sizeInput.value = Number(marker.scale || 0.25).toFixed(3);
+        if (sizeSlider) sizeSlider.value = Number(marker.scale || 0.25);
         if (comment) comment.value = marker.comment || '';
         if (label) label.value = marker.label || marker.name || '';
         if (shapeSelect) shapeSelect.value = marker.displayShape || 'sphere';
+        if (alwaysVisibleCheck) alwaysVisibleCheck.checked = marker.alwaysVisible === true;
     }
 
     updateMarkerTable() {
@@ -444,7 +464,7 @@ export class MarkerUI {
 
         this.renderMarkerGroupControls();
         const markers = this.markerManager.markers;
-        
+
         if (!markers.length) {
             wrap.innerHTML = '<div class="empty-note">Маркеров пока нет</div>';
             return;
@@ -479,7 +499,7 @@ export class MarkerUI {
                 const row = btn.closest('[data-marker-id]');
                 const id = row?.dataset.markerId;
                 if (!id) return;
-                
+
                 const marker = this.markerManager.markers.find((m) => m.id === id);
                 if (!marker) return;
 
@@ -518,7 +538,7 @@ export class MarkerUI {
             this.markerDeleteMode = !this.markerDeleteMode;
             const btn = document.getElementById('delete-selected-marker');
             if (btn) btn.classList.toggle('active-mode', this.markerDeleteMode);
-            this.atlas.renderer.domElement.style.cursor = this.markerDeleteMode ? 'not-allowed' : 
+            this.atlas.renderer.domElement.style.cursor = this.markerDeleteMode ? 'not-allowed' :
                 (document.getElementById('click-marker-mode')?.checked ? 'crosshair' : 'default');
             this.setStatus(this.markerDeleteMode ? 'Режим удаления маркеров включён. Кликните по маркеру для удаления.' : 'Режим удаления маркеров выключен');
         });
@@ -533,7 +553,7 @@ export class MarkerUI {
 
         const selectedSize = document.getElementById('selected-marker-scale');
         const selectedSizeSlider = document.getElementById('selected-marker-scale-slider');
-        
+
         selectedSizeSlider?.addEventListener('input', (e) => {
             const marker = this.getSelectedMarker();
             if (!marker) return;
@@ -542,7 +562,7 @@ export class MarkerUI {
             this.markerManager.updateMarkerProperties(marker.id, { scale });
             document.getElementById('marker-scale').value = scale;
         });
-        
+
         selectedSize?.addEventListener('input', (e) => {
             const marker = this.getSelectedMarker();
             if (!marker) return;
@@ -660,6 +680,53 @@ export class MarkerUI {
             this.selectMarker(marker.id);
             this.updateMarkerTable();
             this.setStatus(`Маркер добавлен по координатам в группу ${marker.markerGroup}`);
+        });
+
+        document.getElementById('marker-always-visible')?.addEventListener('change', (e) => {
+            const marker = this.getSelectedMarker();
+            if (!marker) {
+                e.target.checked = false;
+                return;
+            }
+            this.markerManager.setMarkerAlwaysVisible(marker.id, e.target.checked);
+            this.updateMarkerTable();
+            this.setStatus(`Маркер теперь ${e.target.checked ? 'поверх всех' : 'в глубине'}`);
+        });
+
+        // Все маркеры поверх
+        document.getElementById('set-all-markers-always')?.addEventListener('click', () => {
+            this.markerManager.markers.forEach(m => {
+                this.markerManager.setMarkerAlwaysVisible(m.id, true);
+            });
+            this.updateMarkerTable();
+            this.updateMarkerInspector();
+            this.setStatus('Все маркеры теперь поверх всех объектов');
+        });
+
+        // Все маркеры в глубине
+        document.getElementById('set-all-markers-normal')?.addEventListener('click', () => {
+            this.markerManager.markers.forEach(m => {
+                this.markerManager.setMarkerAlwaysVisible(m.id, false);
+            });
+            this.updateMarkerTable();
+            this.updateMarkerInspector();
+            this.setStatus('Все маркеры теперь учитывают глубину');
+        });
+
+        // Текущая группа поверх
+        document.getElementById('set-group-always')?.addEventListener('click', () => {
+            const count = this.markerManager.setGroupAlwaysVisible(this.activeMarkerGroup, true);
+            this.updateMarkerTable();
+            this.updateMarkerInspector();
+            this.setStatus(`Группа "${this.activeMarkerGroup}" (${count} маркеров) теперь поверх всех`);
+        });
+
+        // Текущая группа в глубине
+        document.getElementById('set-group-normal')?.addEventListener('click', () => {
+            const count = this.markerManager.setGroupAlwaysVisible(this.activeMarkerGroup, false);
+            this.updateMarkerTable();
+            this.updateMarkerInspector();
+            this.setStatus(`Группа "${this.activeMarkerGroup}" (${count} маркеров) теперь в глубине`);
         });
     }
 }

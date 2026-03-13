@@ -19,18 +19,22 @@ export class MarkerManager {
             color: '#7eb6ff',
             scale: 0.25,
             opacity: 1,
-            alwaysVisible: true,
+            alwaysVisible: false, // 👈 меняем на false по умолчанию
             markerGroup: 'group_1',
-            displayShape: 'sphere'
+            displayShape: 'sphere',
+            depthTest: true,       // 👈 добавляем настройку depthTest
+            depthWrite: true       // 👈 добавляем настройку depthWrite
         };
         this.markerGroupVisibility = { group_1: true };
         
-        // Вспомогательные векторы для вычислений
         this.tempVec3 = new THREE.Vector3();
         this.tempVec3b = new THREE.Vector3();
     }
 
     _makeMaterial(style = {}) {
+        // Определяем, нужно ли alwaysVisible (поверх всего)
+        const alwaysVisible = style.alwaysVisible ?? this.defaultStyle.alwaysVisible;
+        
         return new THREE.MeshPhysicalMaterial({
             color: new THREE.Color(style.color || this.defaultStyle.color),
             emissive: new THREE.Color(style.color || this.defaultStyle.color),
@@ -41,8 +45,9 @@ export class MarkerManager {
             clearcoatRoughness: 0.08,
             transparent: true,
             opacity: Number.isFinite(style.opacity) ? style.opacity : this.defaultStyle.opacity,
-            depthTest: !(style.alwaysVisible ?? this.defaultStyle.alwaysVisible),
-            depthWrite: false
+            // Если alwaysVisible = true, игнорируем глубину
+            depthTest: alwaysVisible ? false : (style.depthTest ?? this.defaultStyle.depthTest),
+            depthWrite: alwaysVisible ? false : (style.depthWrite ?? this.defaultStyle.depthWrite)
         });
     }
 
@@ -54,9 +59,16 @@ export class MarkerManager {
         const mesh = new THREE.Mesh(this._getGeometry(style.displayShape), this._makeMaterial(style));
         const size = Number(style.scale ?? this.defaultStyle.scale) || this.defaultStyle.scale;
         mesh.scale.setScalar(size);
-        mesh.renderOrder = 999;
+        
+        // renderOrder теперь зависит от режима
+        mesh.renderOrder = style.alwaysVisible ? 999 : 0;
+        
         mesh.castShadow = false;
         mesh.receiveShadow = false;
+        
+        mesh.userData.isMarker = true;
+        mesh.userData.originalColor = style.color;
+        
         return mesh;
     }
 
@@ -134,7 +146,9 @@ export class MarkerManager {
             color: input.color || this.defaultStyle.color,
             scale: Number(input.scale ?? input.size ?? this.defaultStyle.scale) || this.defaultStyle.scale,
             opacity: Number(input.opacity ?? this.defaultStyle.opacity),
-            alwaysVisible: Boolean(input.alwaysVisible ?? this.defaultStyle.alwaysVisible),
+            alwaysVisible: input.alwaysVisible ?? this.defaultStyle.alwaysVisible,
+            depthTest: input.depthTest ?? this.defaultStyle.depthTest,
+            depthWrite: input.depthWrite ?? this.defaultStyle.depthWrite,
             visible: input.visible !== false,
             model: input.model || '',
             displayShape: input.displayShape || input.shape || input.model || this.defaultStyle.displayShape,
@@ -150,6 +164,51 @@ export class MarkerManager {
         this.ensureMarkerGroup(marker.markerGroup);
         return marker;
     }
+
+    // Добавим метод для переключения режима alwaysVisible
+    setMarkerAlwaysVisible(id, alwaysVisible) {
+        const marker = this.markers.find((m) => m.id === id);
+        if (!marker) return false;
+        
+        marker.alwaysVisible = alwaysVisible;
+        
+        if (marker.sprite) {
+            // Обновляем материал
+            if (marker.sprite.material) {
+                marker.sprite.material.depthTest = !alwaysVisible;
+                marker.sprite.material.depthWrite = !alwaysVisible;
+                marker.sprite.material.needsUpdate = true;
+            }
+            // Обновляем renderOrder
+            marker.sprite.renderOrder = alwaysVisible ? 999 : 0;
+        }
+        
+        return true;
+    }
+
+    // Метод для обновления всех маркеров в группе
+    setGroupAlwaysVisible(groupName, alwaysVisible) {
+        const safe = this.ensureMarkerGroup(groupName);
+        let count = 0;
+        
+        this.markers.forEach(marker => {
+            if (marker.markerGroup === safe) {
+                marker.alwaysVisible = alwaysVisible;
+                if (marker.sprite) {
+                    if (marker.sprite.material) {
+                        marker.sprite.material.depthTest = !alwaysVisible;
+                        marker.sprite.material.depthWrite = !alwaysVisible;
+                        marker.sprite.material.needsUpdate = true;
+                    }
+                    marker.sprite.renderOrder = alwaysVisible ? 999 : 0;
+                }
+                count++;
+            }
+        });
+        
+        return count;
+    }
+
 
     _attachSprite(marker) {
         marker.sprite = this._createSprite(marker);
