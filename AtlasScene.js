@@ -40,8 +40,9 @@ export class AtlasScene {
         // Хранилище объектов
         this.objectByName = new Map();
         this.currentModel = null;
-        this.modelPart1 = null;
-        this.modelPart2 = null;
+        
+        // 🔥 Массив для хранения всех загруженных частей модели
+        this.modelParts = [];
 
         // Менеджер CSV
         this.csvManager = new CSVGroupsManager();
@@ -66,24 +67,82 @@ export class AtlasScene {
         this.modelBaseUrl = options.modelBaseUrl || '';
         this.csvBaseUrl = options.csvBaseUrl || '';
 
-        //index.html пример:
-//     const atlas = new AtlasScene('canvas-container', {
-//         modelBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/models/',
-//         csvBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/'
-//     });
-
         console.log('AtlasScene initialized with:', {
             modelBaseUrl: this.modelBaseUrl,
             csvBaseUrl: this.csvBaseUrl
         });
     }
 
-    async loadModel1(fileName) {
-        // Если fileName уже полный URL, используем как есть
+    // 🔥 Единая функция загрузки модели
+    async loadModel(fileName, partIndex = null) {
         const url = fileName.startsWith('http')
             ? fileName
             : this.modelBaseUrl + fileName;
-        return this.loadModel(url, 1);
+        
+        return new Promise((resolve, reject) => {
+            this.loader.load(url, gltf => {
+                this.cube.visible = false;
+
+                if (!this.currentModel) {
+                    this.currentModel = new THREE.Group();
+                    this.scene.add(this.currentModel);
+                }
+
+                const modelScene = gltf.scene;
+                
+                // Если указан индекс, заменяем конкретную часть
+                if (partIndex !== null) {
+                    if (this.modelParts[partIndex]) {
+                        this.currentModel.remove(this.modelParts[partIndex]);
+                    }
+                    this.modelParts[partIndex] = modelScene;
+                } else {
+                    // Если индекс не указан, добавляем в конец
+                    this.modelParts.push(modelScene);
+                }
+
+                this.currentModel.add(modelScene);
+
+                // Применяем базовый материал ко всем мешам
+                this.applyBaseMaterialToAllMeshes();
+
+                this.buildMeshIndex();
+
+                // Скрываем все элементы после загрузки
+                this.hideAll();
+
+                // Отложенный фокус, чтобы сцена успела обновиться
+                setTimeout(() => this.focusOnModel(), 100);
+                
+                console.log(`✅ Model loaded: ${fileName} (part ${partIndex !== null ? partIndex : this.modelParts.length - 1})`);
+                resolve();
+            }, 
+            (progress) => {
+                const percent = (progress.loaded / progress.total * 100).toFixed(1);
+                console.log(`Loading ${fileName}: ${percent}%`);
+            },
+            (error) => {
+                console.error(`Error loading model ${fileName}:`, error);
+                reject(error);
+            });
+        });
+    }
+
+    // 🔥 Для обратной совместимости (если нужны отдельные методы)
+    async loadModel1(fileName) {
+        return this.loadModel(fileName, 0);
+    }
+
+    async loadModel2(fileName) {
+        return this.loadModel(fileName, 1);
+    }
+
+    async loadModel3(fileName) {
+        return this.loadModel(fileName, 2);
+    }
+
+    async loadModel4(fileName) {
+        return this.loadModel(fileName, 3);
     }
 
     async loadCsv(fileName) {
@@ -105,9 +164,9 @@ export class AtlasScene {
         cameraLight.position.set(0, 0, 0);
         this.lightHolder.add(cameraLight);
 
-        // Окружающий свет (можно раскомментировать если нужен)
-        // const ambientLight = new THREE.AmbientLight(0x404060);
-        // this.scene.add(ambientLight);
+        // Окружающий свет
+        const ambientLight = new THREE.AmbientLight(0x404060);
+        this.scene.add(ambientLight);
     }
 
     buildMeshIndex() {
@@ -138,37 +197,22 @@ export class AtlasScene {
                         this.objectByName.set(variation, c);
                     }
                 });
-
-                if (namedMeshCount < 20) { // Логируем первые 20 для примера
-                    console.log(`Индексирован: "${originalName}" -> варианты:`, variations.slice(0, 5));
-                }
             }
         });
 
         console.log(`buildMeshIndex: всего мешей: ${meshCount}, именованных: ${namedMeshCount}`);
-        console.log('Примеры индексированных имен:', Array.from(this.objectByName.keys()).slice(0, 20));
     }
 
     generateNameVariations(name) {
         const variations = new Set();
         const lower = name.toLowerCase().trim();
 
-        // 1. Оригинал в нижнем регистре
         variations.add(lower);
-
-        // 2. Без точек в конце (l, r)
-        const withoutDot = lower.replace(/\.(l|r)$/i, '$1');
-        variations.add(withoutDot);
-
-        // 3. С точкой (l -> .l, r -> .r)
-        const withDot = lower.replace(/([lr])$/i, '.$1');
-        variations.add(withDot);
-
-        // 4. Подчеркивания в пробелы и наоборот
+        variations.add(lower.replace(/\.(l|r)$/i, '$1'));
+        variations.add(lower.replace(/([lr])$/i, '.$1'));
         variations.add(lower.replace(/_/g, ' '));
         variations.add(lower.replace(/\s+/g, '_'));
 
-        // 5. Комбинации для боковых вариантов
         if (lower.endsWith('l')) {
             variations.add(lower.slice(0, -1) + '.l');
             variations.add(lower.slice(0, -1) + ' left');
@@ -180,7 +224,6 @@ export class AtlasScene {
             variations.add(lower.slice(0, -1) + '_right');
         }
 
-        // 6. Убираем все не-буквенно-цифровые символы
         variations.add(lower.replace(/[^a-z0-9]/g, ''));
 
         return Array.from(variations);
@@ -190,70 +233,35 @@ export class AtlasScene {
         if (!csvName) return null;
 
         const searchKey = csvName.toLowerCase().trim();
-        console.log(`🔍 Поиск "${csvName}" -> ключ "${searchKey}"`);
-
-        // Прямой поиск
-        let obj = this.objectByName.get(searchKey);
-        if (obj) {
-            console.log(`✅ Найден по точному совпадению: "${searchKey}"`);
-            return obj;
-        }
-
-        // Поиск по всем ключам (для отладки)
-        const possibleMatches = Array.from(this.objectByName.keys())
-            .filter(key => key.includes(searchKey) || searchKey.includes(key))
-            .slice(0, 5);
-
-        if (possibleMatches.length > 0) {
-            console.log(`Возможные совпадения для "${searchKey}":`, possibleMatches);
-        } else {
-            console.log(`❌ Нет совпадений для "${searchKey}"`);
-        }
-
-        return null;
-    }
-
-    findObject(csvName) {
-        const key = csvName.toLowerCase().trim();
-        const obj = this.objectByName.get(key);
-        console.log(`findObject("${csvName}") -> key="${key}"`, obj ? 'найден' : 'не найден');
-        return obj || null;
+        return this.objectByName.get(searchKey) || null;
     }
 
     showGroup(groupName) {
-        console.log(`showGroup("${groupName}") called`);
         const all = this.csvManager.getAllGroups();
-        console.log('Все группы:', all.map(g => ({ rawName: g.rawName, items: g.items })));
-
         const group = all.find(g => g.rawName === groupName);
         if (!group || !group.items) {
             console.warn(`Группа "${groupName}" не найдена или не имеет элементов`);
             return false;
         }
 
-        console.log(`Найдена группа:`, group);
-
         group.items.forEach(itemName => {
-            console.log(`Ищем элемент "${itemName}" в группе...`);
             const obj = this.findObject(itemName);
             if (obj) {
-                console.log(`✅ Нашли объект для "${itemName}"`, obj);
                 obj.visible = true;
 
                 // Показываем всех родителей
                 let parent = obj.parent;
                 while (parent) {
-                    console.log(`Показываем родителя:`, parent.type);
                     parent.visible = true;
                     parent = parent.parent;
                 }
-            } else {
-                console.warn(`❌ Объект "${itemName}" не найден в сцене`);
             }
         });
 
         return true;
     }
+
+    
 
     hideAll() {
         if (this.currentModel) {
@@ -281,41 +289,6 @@ export class AtlasScene {
         this.camera.updateProjectionMatrix();
     }
 
-    async loadModel(name, part = 1) {
-        return new Promise((resolve, reject) => {
-            this.loader.load(name, gltf => {
-                this.cube.visible = false;
-
-                if (!this.currentModel) {
-                    this.currentModel = new THREE.Group();
-                    this.scene.add(this.currentModel);
-                }
-
-                if (part === 1) {
-                    if (this.modelPart1) this.currentModel.remove(this.modelPart1);
-                    this.modelPart1 = gltf.scene;
-                } else {
-                    if (this.modelPart2) this.currentModel.remove(this.modelPart2);
-                    this.modelPart2 = gltf.scene;
-                }
-
-                this.currentModel.add(gltf.scene);
-
-                // Применяем базовый материал ко всем мешам
-                this.applyBaseMaterialToAllMeshes();
-
-                this.buildMeshIndex();
-
-                // 🔥 ВАЖНО: скрываем все элементы после загрузки
-                this.hideAll();
-
-                // Отложенный фокус, чтобы сцена успела обновиться
-                setTimeout(() => this.focusOnModel(), 100);
-                resolve();
-            }, undefined, reject);
-        });
-    }
-
     hideGroup(groupName) {
         const all = this.csvManager.getAllGroups();
         const group = all.find(g => g.rawName === groupName);
@@ -338,7 +311,6 @@ export class AtlasScene {
     }
 
     applyMaterialToGroup(groupName, material, options = {}) {
-
         if (typeof material === 'string' || typeof material === 'number') {
             const color = typeof material === 'string' ?
                 (material.startsWith('#') ? material : `#${material}`) :
@@ -349,9 +321,7 @@ export class AtlasScene {
                 metalness: options.metalness || 0,
                 roughness: options.roughness || 0.5
             });
-        }
-
-        else if (material && typeof material === 'object' && !material.isMaterial) {
+        } else if (material && typeof material === 'object' && !material.isMaterial) {
             material = new THREE.MeshStandardMaterial({
                 color: material.color || 0xffffff,
                 metalness: material.metalness || 0,
@@ -383,7 +353,6 @@ export class AtlasScene {
     applyBaseMaterialToAllMeshes() {
         if (!this.currentModel) return;
 
-        // Создаем базовый материал
         const baseMaterial = new THREE.MeshStandardMaterial({
             color: 0xcccccc,
             roughness: 0.7,
@@ -392,12 +361,9 @@ export class AtlasScene {
 
         let meshCount = 0;
 
-        // Проходим по ВСЕМ объектам в модели
         this.currentModel.traverse(child => {
             if (child.isMesh) {
                 meshCount++;
-
-                // Применяем материал к мешу
                 if (Array.isArray(child.material)) {
                     child.material = child.material.map(() => baseMaterial.clone());
                 } else {
@@ -409,7 +375,7 @@ export class AtlasScene {
         console.log(`Applied base material to ${meshCount} meshes`);
     }
 
-    // Создание консольного API (совместимость со старым кодом)
+    // Создание консольного API
     createConsoleAPI() {
         const api = {
             show_group: (groupName) => {
@@ -435,11 +401,7 @@ export class AtlasScene {
                         metalness: options.metalness || 0,
                         roughness: options.roughness || 0.5
                     });
-                }
-
-                // создание материала с определёнными параметрами
-                else if (material && typeof material === 'object' && !material.isMaterial) {
-                    // If material is a config object but not a THREE.Material
+                } else if (material && typeof material === 'object' && !material.isMaterial) {
                     material = new THREE.MeshStandardMaterial({
                         color: material.color || 0xffffff,
                         metalness: material.metalness || 0,
@@ -476,13 +438,7 @@ export class AtlasScene {
             },
             load_model: (fileName) => {
                 if (fileName) {
-                    return this.loadModel1(fileName).then(() => api);
-                }
-                return api;
-            },
-            load_model_2: (fileName) => {
-                if (fileName) {
-                    return this.loadModel2(fileName).then(() => api);
+                    return this.loadModel(fileName).then(() => api);
                 }
                 return api;
             },
@@ -533,16 +489,14 @@ export class AtlasScene {
     animate() {
         requestAnimationFrame(this.animate);
 
-        // Обновляем позицию света за камерой
         if (this.lightHolder) {
             this.lightHolder.position.copy(this.camera.position);
             this.lightHolder.quaternion.copy(this.camera.quaternion);
         }
 
-        // Обновляем маркеры, если они есть
-    if (this.markerManager) {
-        this.markerManager.update();
-    }
+        if (this.markerManager) {
+            this.markerManager.update();
+        }
 
         this.controls.update();
         this.renderer.render(this.scene, this.camera);
@@ -566,7 +520,6 @@ export class AtlasScene {
         } else {
             console.log(`❌ НЕ НАЙДЕН`);
 
-            // Покажем похожие имена из модели
             const searchLower = csvName.toLowerCase();
             const similar = Array.from(this.objectByName.keys())
                 .filter(key => {
@@ -593,54 +546,43 @@ export class AtlasScene {
         return chain;
     }
 
-    // Метод для получения всех мешей (нужен для MarkerManager)
-getMeshes() {
-    const meshes = [];
-    if (this.currentModel) {
-        this.currentModel.traverse(child => {
-            if (child.isMesh) {
-                meshes.push(child);
-            }
-        });
+    getMeshes() {
+        const meshes = [];
+        if (this.currentModel) {
+            this.currentModel.traverse(child => {
+                if (child.isMesh) {
+                    meshes.push(child);
+                }
+            });
+        }
+        return meshes;
     }
-    return meshes;
-}
 
-// Метод для получения ID по ноде (нужен для MarkerManager)
-getIdByNode(node) {
-    // Ищем по имени в objectByName
-    if (node.name) {
-        // Пробуем найти по разным вариантам имени
-        const name = node.name.toLowerCase().trim();
-        // Возвращаем имя как ID (можно изменить логику)
-        return name;
+    getIdByNode(node) {
+        if (node.name) {
+            const name = node.name.toLowerCase().trim();
+            return name;
+        }
+        return node.uuid || '';
     }
-    return node.uuid || '';
-}
 
-// Метод для поиска объекта по ID (совместимость)
-getNodeById(id) {
-    return this.findObject(id);
-}
-
-// Инициализация менеджера маркеров
-initMarkerManager() {
-    if (!this.markerManager) {
-        this.markerManager = new MarkerManager({
-            scene: this.scene,
-            atlas: this,
-            camera: this.camera
-        });
+    getNodeById(id) {
+        return this.findObject(id);
     }
-    return this.markerManager;
-}
 
-resetAllMaterials() {
-    if (!this.currentModel) return;
-    
-    // Возвращаем базовый материал
-    this.applyBaseMaterialToAllMeshes();
-    
-    console.log('All materials reset to base');
-}
+    initMarkerManager() {
+        if (!this.markerManager) {
+            this.markerManager = new MarkerManager({
+                scene: this.scene,
+                atlas: this
+            });
+        }
+        return this.markerManager;
+    }
+
+    resetAllMaterials() {
+        if (!this.currentModel) return;
+        this.applyBaseMaterialToAllMeshes();
+        console.log('All materials reset to base');
+    }
 }

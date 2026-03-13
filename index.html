@@ -436,21 +436,43 @@
     });
 
     try {
+      // 🔥 Загружаем 4 модели последовательно
+      console.log('📥 Загрузка модели 1/4...');
+      await atlas.loadModel('1-5.glb', 0);
       
-      await atlas.loadModel1('1-4.glb');
-      console.log('✅ Model 1 loaded');
-
-      await atlas.loadModel1('5p1.glb');
-      console.log('✅ Model 2 loaded');
-
-      await atlas.loadModel1('5p2.glb');
-      console.log('✅ Model 3 loaded');
-
-      await atlas.loadModel1('6-9.glb');
-      console.log('✅ Model 4 loaded');
-    
+      console.log('📥 Загрузка модели 2/4...');
+      await atlas.loadModel('6-9.glb', 1);
+      
+      
+      
+      console.log('✅ Все 4 модели загружены');
+      
+      // Загружаем CSV
       await atlas.loadCsv('visible_groups.csv');
       console.log('✅ CSV loaded');
+
+      // Проверим конкретные имена
+atlas.findObject('(Abdominal_part_of_pectoralis_major_muscle).ol');
+atlas.findObject('Abductor_digiti_minimi_of_foot.el');
+
+// Посмотрим, какие вообще есть похожие имена в модели
+const searchTerm = 'abductor';
+const similar = Array.from(atlas.objectByName.keys())
+    .filter(key => key.includes(searchTerm));
+console.log('Все имена с "abductor":', similar);
+
+// Если найдем объект, покажем его и сделаем видимым
+const obj = atlas.findObject('Abductor_digiti_minimi_of_foot.l'); // пробуем стандартный суффикс
+if (obj) {
+    console.log('Найден объект:', obj);
+    obj.visible = true;
+    // Показываем родителей
+    let parent = obj.parent;
+    while (parent) {
+        parent.visible = true;
+        parent = parent.parent;
+    }
+}
       
       // Инициализируем менеджер маркеров
       const markerManager = new MarkerManager({ 
@@ -460,18 +482,24 @@
       
       atlas.markerManager = markerManager;
       
-      // Инициализируем UI маркеров - ВСЯ ЛОГИКА ВНУТРИ!
+      // Инициализируем UI маркеров
       const markerUI = new MarkerUI(atlas, markerManager);
       
       // Создаем панели
       markerUI.createGroupControls();
       
-      // Показываем первую группу для примера
-      const groups = atlas.csvManager.getAllGroups();
-      if (groups.length > 0) {
-        atlas.showGroup(groups[0].rawName);
-        if (groups.length > 4) atlas.showGroup(groups[4].rawName);
-      }
+      // Найди проблемную группу
+const problemGroup = atlas.csvManager.getAllGroups().find(g => g.rawName === '2:_Muscular_insertions');
+console.log('Проблемная группа:', problemGroup);
+
+// Посмотри первые несколько элементов группы
+console.log('Элементы группы (первые 10):', problemGroup.items.slice(0, 10));
+
+// Проверь, есть ли эти элементы в индексе
+problemGroup.items.slice(0, 5).forEach(itemName => {
+    const found = atlas.findObject(itemName);
+    console.log(`Элемент "${itemName}":`, found ? '✅ НАЙДЕН' : '❌ НЕ НАЙДЕН');
+});
       
       window.atlas = atlas;
       window.markerManager = markerManager;
