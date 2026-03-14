@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>Атлас — только модель</title>
+  <title>Атлас — пример сцены</title>
   <script type="importmap">
     {
       "imports": {
@@ -18,14 +18,13 @@
   <button id="panel-toggle" type="button" title="Скрыть / показать панель">«</button>
   <div id="canvas-container"></div>
 
-  <!-- При file:// подключаем main.js с CDN (CORS блокирует локальные модули). При http(s) — локально. -->
   <script>
     (function () {
       var isFile = document.location.protocol === 'file:';
       var base = isFile ? 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/' : '';
       var s = document.createElement('script');
       s.type = 'module';
-      s.src = base + 'main.js';
+      s.src = base + 'example-scene.js';
       document.currentScript.after(s);
     })();
   </script>

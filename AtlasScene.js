@@ -6,7 +6,7 @@ import { CSVGroupsManager } from './csv-groups.js';
 import { MarkerManager } from './MarkerManager.js';
 
 /** Базовый URL репозитория на CDN — используется по умолчанию, чтобы приложение работало из одного index.html (file://, localhost или CDN). */
-const DEFAULT_CDN_BASE = 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@restructure/';
+const DEFAULT_CDN_BASE = 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/';
 
 export class AtlasScene {
     constructor(containerId, options = {}) {
