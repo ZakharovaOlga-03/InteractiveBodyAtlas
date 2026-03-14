@@ -133,23 +133,6 @@ export class AtlasScene {
         });
     }
 
-    // Для обратной совместимости
-    async loadModel1(fileName) {
-        return this.loadModel(fileName, 0);
-    }
-
-    async loadModel2(fileName) {
-        return this.loadModel(fileName, 1);
-    }
-
-    async loadModel3(fileName) {
-        return this.loadModel(fileName, 2);
-    }
-
-    async loadModel4(fileName) {
-        return this.loadModel(fileName, 3);
-    }
-
     async loadCsv(fileName) {
         const url = fileName.startsWith('http')
             ? fileName
