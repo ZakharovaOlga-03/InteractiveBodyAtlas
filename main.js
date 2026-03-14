@@ -8,8 +8,8 @@ import { MarkerManager } from './MarkerManager.js';
 import { MarkerUI } from './MarkerUI.js';
 
 const atlas = new AtlasScene('canvas-container', {
-  modelBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/models/',
-  csvBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/'
+  modelBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@restructure/models/',
+  csvBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@restructure/'
 });
 
 try {
@@ -50,15 +50,11 @@ try {
   const markerUI = new MarkerUI(atlas, markerManager);
   markerUI.createGroupControls();
 
-  // Сцена-пример по умолчанию: только 3:_Joints и 8:_Visceral_systems, с разными материалами
-  const jointsName = '3:_Joints';
-  const visceralName = '8:_Visceral_systems';
-  atlas.showGroup(jointsName);
-  atlas.applyMaterialToGroup(jointsName, '#e8c890', { metalness: 0.2, roughness: 0.6 });
-  atlas.showGroup(visceralName);
-  atlas.applyMaterialToGroup(visceralName, '#a05060', { metalness: 0, roughness: 0.65 });
-
-  atlas.focusOnModel();
+  const groups = atlas.csvManager.getAllGroups();
+  if (groups.length > 0) {
+    atlas.showGroup(groups[0].rawName);
+    if (groups.length > 4) atlas.showGroup(groups[4].rawName);
+  }
 
   window.atlas = atlas;
   window.markerManager = markerManager;
