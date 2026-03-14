@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
   <meta charset="UTF-8" />
   <title>Атлас — только модель</title>
@@ -12,521 +11,82 @@
       }
     }
   </script>
-  <style>
-    :root {
-      --left-bg: #ececec;
-      --left-panel: #ececec;
-      --ink: #1e1e1e;
-      --line: #2d2d2d;
-      --soft-line: #6d6d6d;
-      --field: #f9f9f9;
-      --muted: #4f4f4f;
-      --dark-panel-bg: rgba(18, 20, 32, 0.94);
-      --dark-panel-border: rgba(255, 255, 255, 0.12);
-      --dark-text: #f4f7ff;
-      --dark-muted: #aab6d3;
-      --dark-accent: #7eb6ff;
-      --left-panel-width: 500px;
-      --left-panel-hidden-offset: -520px;
-      --toggle-size: 40px;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      height: 100%;
-      width: 100%;
-      font-family: Arial, sans-serif;
-    }
-
-    #canvas-container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-    }
-
-    canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    #info {
-      position: absolute;
-      top: 10px;
-      left: calc(var(--left-panel-width) + 14px);
-      color: white;
-      background: rgba(0, 0, 0, 0.76);
-      padding: 8px 12px;
-      border-radius: 6px;
-      z-index: 100;
-      max-width: 360px;
-      font-size: 13px;
-      transition: left 0.25s ease;
-    }
-
-    body.panel-collapsed #info {
-      left: 58px;
-    }
-
-    #panel-toggle {
-      position: fixed;
-      top: 8px;
-      left: calc(var(--left-panel-width) - var(--toggle-size) - 20px);
-      width: var(--toggle-size);
-      height: var(--toggle-size);
-      border: 2px solid var(--line);
-      background: #f7f7f7;
-      color: var(--ink);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      line-height: 1;
-      cursor: pointer;
-      z-index: 1000;
-      user-select: none;
-      transition: left 0.25s ease;
-      padding: 0;
-      border-radius: 4px;
-    }
-
-    body.panel-collapsed #panel-toggle {
-      left: 10px;
-    }
-
-    /* Стили для панелей */
-    .panel {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      width: 320px;
-      max-height: calc(100vh - 40px);
-      overflow-y: auto;
-      z-index: 120;
-    }
-
-    .panel-left {
-      position: fixed;
-      left: 0;
-      top: 0;
-      width: var(--left-panel-width);
-      height: 100vh;
-      background: var(--left-panel);
-      border-right: 2px solid var(--line);
-      padding: 18px 12px 20px;
-      overflow-y: auto;
-      z-index: 110;
-      transition: transform 0.25s ease;
-      will-change: transform;
-      color: var(--ink);
-    }
-
-    body.panel-collapsed .panel-left {
-      transform: translateX(var(--left-panel-hidden-offset));
-    }
-
-    #tools-panel .marker-shell {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 0 0 14px;
-      padding: 0 4px;
-    }
-
-    #tools-panel .marker-shell h3 {
-      margin: 0;
-      color: var(--ink);
-      font-size: 16px;
-      font-weight: 700;
-    }
-
-    #tools-panel .icon-btn,
-    #tools-panel .mini-btn {
-      width: 48px;
-      min-width: 48px;
-      height: 36px;
-      border: 2px solid var(--line);
-      border-radius: 2px;
-      background: #f7f7f7;
-      color: var(--ink);
-      padding: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      line-height: 1;
-      cursor: pointer;
-    }
-
-    #tools-panel .mini-btn.primary {
-      background: #f7f7f7;
-      color: var(--ink);
-      border-color: var(--line);
-    }
-
-    #tools-panel .mini-btn.active-mode {
-      background: #ffe0e0;
-      border-color: #b32323;
-      color: #b32323;
-    }
-
-    #tools-panel .mini-btn.danger {
-      background: #ffe0e0;
-      border-color: #b32323;
-      color: #b32323;
-    }
-
-    #tools-panel .section-card {
-      background: transparent;
-      border: 2px solid var(--line);
-      border-radius: 10px;
-      padding: 12px 10px 10px;
-      margin: 0 0 14px;
-    }
-
-    #tools-panel .section-title {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--ink);
-      margin: 0 0 10px;
-    }
-
-    #tools-panel .action-row {
-      display: grid;
-      grid-template-columns: 1fr 52px;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-
-    #tools-panel .action-row:last-child {
-      margin-bottom: 0;
-    }
-
-    #tools-panel .action-label,
-    #tools-panel label,
-    #tools-panel .data-line,
-    #tools-panel .group-store-name,
-    #tools-panel .subtle,
-    #tools-panel .small-note,
-    #tools-panel .empty-note {
-      color: var(--ink);
-    }
-
-    #tools-panel label {
-      display: block;
-      font-size: 12px;
-      margin-bottom: 4px;
-    }
-
-    #tools-panel .marker-data-grid {
-      display: grid;
-      gap: 10px;
-    }
-
-    #tools-panel .data-line {
-      display: grid;
-      grid-template-columns: 110px 1fr;
-      gap: 10px;
-      align-items: center;
-      font-size: 13px;
-    }
-
-    #tools-panel .slider-row {
-      display: grid;
-      grid-template-columns: 1fr 78px;
-      gap: 10px;
-      align-items: center;
-    }
-
-    #tools-panel .inline-row {
-      display: grid;
-      grid-template-columns: 1fr 52px;
-      gap: 10px;
-      align-items: center;
-    }
-
-    #tools-panel input,
-    #tools-panel select,
-    #tools-panel textarea,
-    #tools-panel button:not(.mini-btn):not(.icon-btn) {
-      width: 100%;
-      background: var(--field);
-      color: var(--ink);
-      border: 2px solid var(--line);
-      border-radius: 2px;
-      padding: 7px 9px;
-    }
-
-    #tools-panel input[type="color"] {
-      padding: 2px;
-      height: 30px;
-    }
-
-    #tools-panel input[type="range"] {
-      border: none;
-      padding: 0;
-      background: transparent;
-      accent-color: #000;
-    }
-
-    #tools-panel textarea {
-      resize: vertical;
-      min-height: 74px;
-    }
-
-    #tools-panel .field-row {
-      margin-bottom: 8px;
-    }
-
-    #tools-panel .button-row {
-      display: flex;
-      gap: 8px;
-    }
-
-    #tools-panel .button-row>* {
-      flex: 1;
-    }
-
-    #tools-panel #stored-marker-groups-list {
-      border: 2px solid var(--line);
-      min-height: 110px;
-      padding: 8px;
-      background: transparent;
-    }
-
-    #tools-panel .group-store-row {
-      display: grid;
-      grid-template-columns: 1fr 120px;
-      gap: 6px;
-      align-items: center;
-      padding: 4px 0;
-      border-bottom: none;
-    }
-
-    #tools-panel .group-store-row .mini-btn {
-      width: 32px;
-      min-width: 32px;
-      height: 30px;
-      font-size: 18px;
-    }
-
-    #tools-panel #marker-table {
-      max-height: 230px;
-      overflow: auto;
-      display: grid;
-      gap: 8px;
-    }
-
-    #tools-panel .marker-row {
-      padding: 8px;
-      border: 2px solid var(--line);
-      border-radius: 4px;
-      background: rgba(255, 255, 255, 0.35);
-      cursor: pointer;
-    }
-
-    #tools-panel .marker-row:hover,
-    #tools-panel .marker-row.selected {
-      background: rgba(255, 255, 255, 0.55);
-      border-color: var(--line);
-    }
-
-    #tools-panel .compact-row {
-      margin-top: 6px;
-      display: flex;
-      gap: 6px;
-    }
-
-    #tools-panel .compact-row button {
-      background: #f7f7f7;
-      border: 1px solid var(--soft-line);
-      border-radius: 4px;
-      padding: 6px 8px;
-      cursor: pointer;
-    }
-
-    #group-panel {
-      background: var(--dark-panel-bg);
-      border: 1px solid var(--dark-panel-border);
-      border-radius: 18px;
-      padding: 16px;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
-      backdrop-filter: blur(10px);
-      color: var(--dark-text);
-    }
-
-    #group-panel h3 {
-      margin: 0 0 12px;
-      color: var(--dark-accent);
-      font-size: 16px;
-    }
-
-    #group-panel button,
-    #group-panel input,
-    #group-panel select {
-      width: 100%;
-      background: rgba(255, 255, 255, 0.08);
-      color: var(--dark-text);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 8px;
-      padding: 8px 10px;
-    }
-
-    #group-panel button:hover {
-      background: rgba(255, 255, 255, 0.14);
-    }
-
-    #group-panel .button-row {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    #group-panel .button-row>* {
-      flex: 1;
-    }
-
-    #group-panel .group-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 7px 0;
-      padding: 4px 0;
-    }
-
-    #group-panel .group-row input[type="checkbox"] {
-      width: auto;
-    }
-
-    #group-panel label,
-    #group-panel .small-note,
-    #group-panel .empty-note,
-    #group-panel .subtle {
-      color: var(--dark-muted);
-      font-size: 12px;
-    }
-
-    .toggle-hidden {
-      display: none;
-    }
-  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/style.css">
 </head>
-
 <body>
   <div id="info">Загрузка...</div>
   <button id="panel-toggle" type="button" title="Скрыть / показать панель">«</button>
   <div id="canvas-container"></div>
 
   <script type="module">
-    import { AtlasScene } from './AtlasScene.js';
-    import { MarkerManager } from './MarkerManager.js';
-    import { MarkerUI } from './MarkerUI.js';
+    import { AtlasScene } from 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/AtlasScene.js';
+    import { MarkerManager } from 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/MarkerManager.js';
+    import { MarkerUI } from 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/MarkerUI.js';
 
     const atlas = new AtlasScene('canvas-container', {
-      modelBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/models/',
-      csvBaseUrl: 'https://raw.githubusercontent.com/ZakharovaOlga-03/InteractiveBodyAtlas/main/'
+      modelBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/models/',
+      csvBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/'
     });
 
     try {
-      // 🔥 Загружаем 4 модели последовательно
-      console.log('📥 Загрузка модели 1/4...');
+      
       await atlas.loadModel('p1.glb', 0);
+      console.log('✅ Model 1 loaded');
 
-      console.log('📥 Загрузка модели 2/4...');
       await atlas.loadModel('p2.glb', 1);
+      console.log('✅ Model 2 loaded');
 
-      console.log('📥 Загрузка модели 2/4...');
       await atlas.loadModel('p3.glb', 2);
+      console.log('✅ Model 3 loaded');
 
-      console.log('📥 Загрузка модели 2/4...');
       await atlas.loadModel('p4.glb', 3);
+      console.log('✅ Model 4 loaded');
 
-      console.log('📥 Загрузка модели 1/4...');
       await atlas.loadModel('p5.glb', 4);
+      console.log('✅ Model 1 loaded');
 
-      console.log('📥 Загрузка модели 2/4...');
       await atlas.loadModel('p6.glb', 5);
+      console.log('✅ Model 2 loaded');
 
-      console.log('📥 Загрузка модели 2/4...');
       await atlas.loadModel('p7.glb', 6);
+      console.log('✅ Model 3 loaded');
 
-      console.log('📥 Загрузка модели 2/4...');
       await atlas.loadModel('p8.glb', 7);
-
-      console.log('✅ Все 4 модели загружены');
-
-      // Загружаем CSV
+      console.log('✅ Model 4 loaded');
+    
+      // CSV: сначала локально (visible_groups.csv рядом с index.html), при отсутствии — с csvBaseUrl (GitHub)
       await atlas.loadCsv('visible_groups.csv');
       console.log('✅ CSV loaded');
-
-
-
-      // Посмотрим, какие вообще есть похожие имена в модели
-      const searchTerm = 'abductor';
-      const similar = Array.from(atlas.objectByName.keys())
-        .filter(key => key.includes(searchTerm));
-      console.log('Все имена с "abductor":', similar);
-
-      // Если найдем объект, покажем его и сделаем видимым
-      const obj = atlas.findObject('Abductor_digiti_minimi_of_foot.l'); // пробуем стандартный суффикс
-      if (obj) {
-        console.log('Найден объект:', obj);
-        obj.visible = true;
-        // Показываем родителей
-        let parent = obj.parent;
-        while (parent) {
-          parent.visible = true;
-          parent = parent.parent;
-        }
-      }
-
+      
       // Инициализируем менеджер маркеров
-      const markerManager = new MarkerManager({
-        scene: atlas.scene,
-        atlas: atlas
+      const markerManager = new MarkerManager({ 
+        scene: atlas.scene, 
+        atlas: atlas 
       });
-
+      
       atlas.markerManager = markerManager;
-
-      // Инициализируем UI маркеров
+      
+      // Инициализируем UI маркеров - ВСЯ ЛОГИКА ВНУТРИ!
       const markerUI = new MarkerUI(atlas, markerManager);
-
+      
       // Создаем панели
       markerUI.createGroupControls();
-
-      // Найди проблемную группу
-      const problemGroup = atlas.csvManager.getAllGroups().find(g => g.rawName === '2:_Muscular_insertions');
-      console.log('Проблемная группа:', problemGroup);
-
-      // Посмотри первые несколько элементов группы
-      console.log('Элементы группы (первые 10):', problemGroup.items.slice(0, 10));
-
-      // Проверь, есть ли эти элементы в индексе
-      problemGroup.items.slice(0, 5).forEach(itemName => {
-        const found = atlas.findObject(itemName);
-        console.log(`Элемент "${itemName}":`, found ? '✅ НАЙДЕН' : '❌ НЕ НАЙДЕН');
-      });
-
+      
+      // Показываем первую группу для примера
+      const groups = atlas.csvManager.getAllGroups();
+      if (groups.length > 0) {
+        atlas.showGroup(groups[0].rawName);
+        if (groups.length > 4) atlas.showGroup(groups[4].rawName);
+      }
+      
       window.atlas = atlas;
       window.markerManager = markerManager;
       window.markerUI = markerUI;
-
+      
     } catch (error) {
       console.error('❌ Error loading assets:', error);
       document.getElementById('info').textContent = 'Ошибка загрузки: ' + error.message;
     }
   </script>
 </body>
-
 </html>
