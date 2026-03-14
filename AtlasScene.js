@@ -5,6 +5,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSVGroupsManager } from './csv-groups.js';
 import { MarkerManager } from './MarkerManager.js';
 
+/** Базовый URL репозитория на CDN — используется по умолчанию, чтобы приложение работало из одного index.html (file://, localhost или CDN). */
+const DEFAULT_CDN_BASE = 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@restructure/';
+
 export class AtlasScene {
     constructor(containerId, options = {}) {
         this.container = document.getElementById(containerId);
@@ -37,6 +40,12 @@ export class AtlasScene {
         // Загрузчик моделей
         this.loader = new GLTFLoader();
 
+        // Базовые URL: если не заданы — используем CDN, чтобы работало из одного index.html (file://, localhost, CDN)
+        this.modelBaseUrl = options.modelBaseUrl ?? (DEFAULT_CDN_BASE + 'models/');
+        this.csvBaseUrl = options.csvBaseUrl ?? DEFAULT_CDN_BASE;
+        if (this.modelBaseUrl && !this.modelBaseUrl.endsWith('/')) this.modelBaseUrl += '/';
+        // path не задаём: в loadModel всегда передаём полный URL, чтобы не дублировать базовый путь в FileLoader
+
         // Хранилище объектов
         this.objectByName = new Map(); // КЛЮЧ: точное имя из модели
         this.currentModel = null;
@@ -62,9 +71,6 @@ export class AtlasScene {
         // Обработка ресайза
         window.addEventListener('resize', () => this.onResize());
 
-        this.modelBaseUrl = options.modelBaseUrl || '';
-        this.csvBaseUrl = options.csvBaseUrl || '';
-
         console.log('AtlasScene initialized with:', {
             modelBaseUrl: this.modelBaseUrl,
             csvBaseUrl: this.csvBaseUrl
@@ -75,8 +81,8 @@ export class AtlasScene {
     async loadModel(fileName, partIndex = null) {
         const url = fileName.startsWith('http')
             ? fileName
-            : this.modelBaseUrl + fileName;
-        
+            : (this.modelBaseUrl + fileName);
+
         return new Promise((resolve, reject) => {
             this.loader.load(url, gltf => {
                 this.cube.visible = false;

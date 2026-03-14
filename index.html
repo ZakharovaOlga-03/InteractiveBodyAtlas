@@ -11,82 +11,23 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@restructure/style.css">
 </head>
 <body>
   <div id="info">Загрузка...</div>
   <button id="panel-toggle" type="button" title="Скрыть / показать панель">«</button>
   <div id="canvas-container"></div>
 
-  <script type="module">
-    import { AtlasScene } from 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/AtlasScene.js';
-    import { MarkerManager } from 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/MarkerManager.js';
-    import { MarkerUI } from 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/MarkerUI.js';
-
-    const atlas = new AtlasScene('canvas-container', {
-      modelBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/models/',
-      csvBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/'
-    });
-
-    try {
-      
-      await atlas.loadModel('p1.glb', 0);
-      console.log('✅ Model 1 loaded');
-
-      await atlas.loadModel('p2.glb', 1);
-      console.log('✅ Model 2 loaded');
-
-      await atlas.loadModel('p3.glb', 2);
-      console.log('✅ Model 3 loaded');
-
-      await atlas.loadModel('p4.glb', 3);
-      console.log('✅ Model 4 loaded');
-
-      await atlas.loadModel('p5.glb', 4);
-      console.log('✅ Model 1 loaded');
-
-      await atlas.loadModel('p6.glb', 5);
-      console.log('✅ Model 2 loaded');
-
-      await atlas.loadModel('p7.glb', 6);
-      console.log('✅ Model 3 loaded');
-
-      await atlas.loadModel('p8.glb', 7);
-      console.log('✅ Model 4 loaded');
-    
-      // CSV: сначала локально (visible_groups.csv рядом с index.html), при отсутствии — с csvBaseUrl (GitHub)
-      await atlas.loadCsv('visible_groups.csv');
-      console.log('✅ CSV loaded');
-      
-      // Инициализируем менеджер маркеров
-      const markerManager = new MarkerManager({ 
-        scene: atlas.scene, 
-        atlas: atlas 
-      });
-      
-      atlas.markerManager = markerManager;
-      
-      // Инициализируем UI маркеров - ВСЯ ЛОГИКА ВНУТРИ!
-      const markerUI = new MarkerUI(atlas, markerManager);
-      
-      // Создаем панели
-      markerUI.createGroupControls();
-      
-      // Показываем первую группу для примера
-      const groups = atlas.csvManager.getAllGroups();
-      if (groups.length > 0) {
-        atlas.showGroup(groups[0].rawName);
-        if (groups.length > 4) atlas.showGroup(groups[4].rawName);
-      }
-      
-      window.atlas = atlas;
-      window.markerManager = markerManager;
-      window.markerUI = markerUI;
-      
-    } catch (error) {
-      console.error('❌ Error loading assets:', error);
-      document.getElementById('info').textContent = 'Ошибка загрузки: ' + error.message;
-    }
+  <!-- При file:// подключаем main.js с CDN (CORS блокирует локальные модули). При http(s) — локально. -->
+  <script>
+    (function () {
+      var isFile = document.location.protocol === 'file:';
+      var base = isFile ? 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@restructure/' : '';
+      var s = document.createElement('script');
+      s.type = 'module';
+      s.src = base + 'main.js';
+      document.currentScript.after(s);
+    })();
   </script>
 </body>
 </html>
