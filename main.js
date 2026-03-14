@@ -8,8 +8,8 @@ import { MarkerManager } from './MarkerManager.js';
 import { MarkerUI } from './MarkerUI.js';
 
 const atlas = new AtlasScene('canvas-container', {
-  modelBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@restructure/models/',
-  csvBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@restructure/'
+  modelBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/models/',
+  csvBaseUrl: 'https://cdn.jsdelivr.net/gh/ZakharovaOlga-03/InteractiveBodyAtlas@main/'
 });
 
 try {
